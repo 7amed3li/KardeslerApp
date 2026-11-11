@@ -50,13 +50,19 @@ jobs:
         with:
           version: 10.11.1
 
-      - name: Verify Database Migrations & Run SQL Tests
+      - name: Verify Database Migrations (001+008+009 superuser, 002-007 app_migrator) & SQL Security Tests
         env:
           PGPASSWORD: postgres_dev_password
         run: |
-          for f in 001_extensions_and_roles.sql 002_core.sql 003_menu.sql 004_orders.sql 005_promotions.sql 006_security_rls.sql 007_seed.sql; do
-            psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/$f
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/001_extensions_and_roles.sql
+          PGPASSWORD=migrator_dev_secret_change_me
+          for f in 002_core.sql 003_menu.sql 004_orders.sql 005_promotions.sql 006_security_rls.sql 007_seed.sql; do
+            psql -h localhost -U app_migrator -d kardesler_db -v ON_ERROR_STOP=1 -f database/$f
           done
+          PGPASSWORD=postgres_dev_password
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/008_hardening.sql
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/009_order_flow.sql
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests_phase0.sql
           psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests.sql
 
       - name: Install Dependencies
@@ -68,8 +74,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
-      - name: Monorepo Verification (Lint, Typecheck, Test)
-        run: pnpm check
+      - name: Monorepo Verification (Lint, Typecheck, Architecture, Tests, Build)
+        run: pnpm check && pnpm build
+
+      - name: Backend Domain & Application Coverage Gate
+        run: pnpm --filter @kardesler/backend test:coverage
 
       - name: Production Dependency Audit
         run: pnpm audit --prod

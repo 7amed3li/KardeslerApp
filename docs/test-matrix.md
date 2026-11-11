@@ -21,7 +21,10 @@ Last updated: 2026-11-11
 9. **Concurrency, DB Parity & Properties**:
    - `concurrency.test.ts`: Coupon `max_total_uses=1` race returns `[201, 422]`; simultaneous staff accept vs customer cancel returns `[200, 409]` without corrupting state.
    - `architecture.test.ts`: `OrderStateMachine` transition graph matches PostgreSQL `fn_order_status_and_immutability_trigger` across all `(from, to)` pairs (`7 x 6 = 42` transitions).
-   - `domain-properties.test.ts`: `fast-check` property-based tests on `PricingDomain` and `CouponDomain`.
+   - `domain-properties.test.ts` + `application-coverage.test.ts`: `fast-check` property-based tests & boundary assertions on `PricingDomain`, `CouponDomain`, `LoyaltyDomain`, `PaymentDomain`, `DeliveryDomain`, `OrderStateMachine`, `ThermalTicketDomain`, and `AuthorizationPolicy`.
+   - **Coverage & Mutation Testing (`test:coverage` & `mutate`):**
+     - `vitest run --coverage` across `src/domain/` & `src/application/`: **98.72% Statements | 90.02% Branches | 99.03% Functions | 98.72% Lines** (13 test files, 56 tests).
+     - Stryker (`stryker run` targeting `pricing.domain.ts` & `coupon.domain.ts`): **77.12% total (`77.99%` covered; 209/271 killed)** — `coupon.domain.ts` 78.43%, `pricing.domain.ts` 75.42%.
 
 ## Endpoint Inventory Matrix (66 Routes)
 
@@ -93,3 +96,4 @@ Last updated: 2026-11-11
 | 64 | GET | `/api/v1/admin/banners` | owner | `endpoint-matrix` |
 | 65 | POST | `/api/v1/admin/banners` | owner | `endpoint-matrix` |
 | 66 | PATCH | `/api/v1/admin/settings` | owner | `endpoint-matrix` |
+

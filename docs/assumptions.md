@@ -28,3 +28,11 @@
 ## 4. برنامج الولاء ودعوة الأصدقاء (Loyalty & Referrals)
 - **[NEEDS CONFIRMATION] معدل اكتساب نقاط الولاء:** عند اكتمال توصيل الطلب (`delivered`)، يكتسب العميل **نقطة واحدة لكل 1 ليرة تركية (`100` قرش)** من صافي قيمة الطلب (`total_kurus`).
 - **[NEEDS CONFIRMATION] مكافأة دعوة صديق (`referrals`):** عند إتمام الصديق المدعو لأول طلب مُسلّم (`delivered`)، يحصل الداعي (`referrer`) على **100 نقطة** ويحصل المدعو (`referred`) على **50 نقطة** في سجل `loyalty_ledger`.
+
+---
+
+## 5. البنية التحتية، Redis، وتدوير المفاتيح (Infrastructure, Redis & JWT Rotation)
+- **[NEEDS CONFIRMATION] إلزامية Redis 7 في الإنتاج:** تم نقل جميع حالات الذاكرة المؤقتة (محدِّد المعدل `RedisRateLimiter`، كاش القائمة `RedisCacheAdapter`، بث أحداث المطبخ `RedisEventBus`، قائمة سحب رموز الطابعة `RedisRevokedTokenStore`، ومجدول المهام `BullMQ`) إلى **Redis 7** بحيث يدعم الخادم التشغيل الأفقي متعدد النسخ دون فقدان الحالة عند إعادة التشغيل.
+- **[NEEDS CONFIRMATION] سياسة تدوير مفاتيح JWT (`kid` rotation):** تم اعتماد `jose` بخوارزمية `HS256` مع ترويسة `kid` وقبول مفتاح حالي (`JWT_*_SECRET` / `JWT_KEY_ID`) ومفتاح سابق اختياري (`JWT_*_PREVIOUS_SECRET` / `JWT_PREVIOUS_KEY_ID`) لتدوير الأسرار بدون قطع جلسات المستخدمين الفعّالة.
+- **[NEEDS CONFIRMATION] تفعيل بيانات التجربة في `007_seed.sql`:** يحتوي ملف `007_seed.sql` على بيانات تجريبية/مؤقتة (PLACEHOLDER) ويرفض التنفيذ في بيئة `NODE_ENV=production` عبر فحص `app.node_env`. يلزم تزويد كلمات مرور وبيانات حسابات التشغيل الحقيقية قبل الإطلاق.
+- **[NEEDS CONFIRMATION] تقاطع الصلاحيات عند حذف العناوين:** نظراً لتطبيق سياسة RLS `pol_addresses_customer_select` (`deleted_at IS NULL`) على `public.addresses`، ينفّذ المسار `DELETE /api/v1/addresses/:id` حذفاً فعلياً محكوماً بسياسة `pol_addresses_customer_delete` (`user_id = app_user_id()`) مع احتفاظ جدول `orders` بلقطة `address_snapshot` التاريخية.

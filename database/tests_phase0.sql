@@ -516,4 +516,50 @@ BEGIN
     RAISE NOTICE 'PASS Test 6: Deferred math constraints (subtotal_kurus & line_total_kurus) verified.';
 END $$;
 
+-- ============================================================================
+-- TEST 7: Turkish translation child delete guard + 100+ item bulk staging import
+-- ============================================================================
+DO $$
+DECLARE
+    v_owner_id uuid := 'a0000000-0000-0000-0000-000000000001';
+    v_adana_id uuid := 'f0000000-0000-0000-0000-000000000001';
+    v_tr_del_blocked boolean := false;
+    v_i integer;
+    v_imported integer := 0;
+BEGIN
+    SET LOCAL ROLE app_api;
+    PERFORM set_config('app.current_role', 'owner', true);
+    PERFORM set_config('app.current_staff_id', v_owner_id::text, true);
+
+    -- 7a. Attempting to delete the required Turkish ('tr') child translation must fail at deferrable check
+    BEGIN
+        DELETE FROM public.menu_item_translations
+        WHERE menu_item_id = v_adana_id AND language = 'tr';
+        SET CONSTRAINTS ALL IMMEDIATE;
+    EXCEPTION WHEN check_violation THEN
+        v_tr_del_blocked := true;
+    END;
+
+    IF NOT v_tr_del_blocked THEN
+        RAISE EXCEPTION 'FAIL 7a: Deleting required Turkish (tr) translation under app_api was not blocked!';
+    END IF;
+
+    -- 7b. Bulk stage 105 menu items and execute fn_process_menu_import_staging()
+    FOR v_i IN 1..105 LOOP
+        INSERT INTO public.menu_import_staging (
+            category_slug, category_name_tr, item_slug, item_name_tr, price_try, vat_rate_percent, is_available, sort_order
+        ) VALUES (
+            'bulk-cat-01', 'Toplu Kategori', 'bulk-item-' || v_i, 'Toplu Ürün ' || v_i, 125.50, 10, true, v_i
+        );
+    END LOOP;
+
+    SELECT public.fn_process_menu_import_staging() INTO v_imported;
+    IF v_imported <> 105 THEN
+        RAISE EXCEPTION 'FAIL 7b: Expected 105 bulk staging items imported, got %', v_imported;
+    END IF;
+
+    RESET ROLE;
+    RAISE NOTICE 'PASS Test 7: Required Turkish translation delete guard & 105-item bulk staging import verified.';
+END $$;
+
 ROLLBACK;

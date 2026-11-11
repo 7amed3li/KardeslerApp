@@ -71,8 +71,8 @@ describe('Step 3 & Step 5 Architecture, Boundaries, and Domain-DB Parity Gates',
               subtotal_kurus, discount_kurus, delivery_fee_kurus, total_kurus, min_order_kurus_applied,
               customer_name_snapshot, customer_phone_snapshot, payment_method
             ) VALUES (
-              ${userId}::uuid, 'pickup', ${fromStatus}, '2026-11-11',
-              (90000 + floor(random()*9000)::int), 'parity-' || gen_random_uuid()::text,
+              ${userId}::uuid, 'pickup', ${fromStatus}, '2099-01-01',
+              public.next_order_number('2099-01-01'), 'parity-' || gen_random_uuid()::text,
               34000, 0, 0, 34000, 0, 'Parity', '+905331112233', 'cash_on_delivery'
             ) RETURNING id
           `);

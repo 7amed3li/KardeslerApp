@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { PricingDomain, type PricedMenuItem } from '../src/domain/pricing/pricing.domain.js';
-import { calculateCouponDiscountKurus, evaluateCouponForQuote, type CouponRule } from '../src/domain/coupons/coupon.domain.js';
+import { calculateCouponDiscountKurus, evaluateCouponForQuote, isCouponActiveAt, type CouponRule } from '../src/domain/coupons/coupon.domain.js';
 import { LoyaltyDomain } from '../src/domain/loyalty/loyalty.domain.js';
 import { PaymentDomain } from '../src/domain/payments/payment.domain.js';
 import { DeliveryDomain } from '../src/domain/delivery/delivery.domain.js';
@@ -218,6 +218,69 @@ describe('Step 5 Pure Domain & Property-Based Tests', () => {
     });
     expect(ticket.textTr).toContain('SİPARİŞ NO: #77');
     expect(Buffer.from(ticket.escPosBase64, 'base64').length).toBeGreaterThan(50);
+  });
+
+  it('kills boundary & equality mutants in PricingDomain and CouponDomain', () => {
+    const start = new Date('2026-11-11T09:00:00Z'); // 12:00 Europe/Istanbul
+    const end = new Date('2026-11-11T17:00:00Z'); // 20:00 Europe/Istanbul
+    const cpn = {
+      id: 'c-bnd',
+      code: 'BND',
+      type: 'fixed_amount' as const,
+      value: 4000,
+      minOrderKurus: 34000,
+      startsAt: start,
+      endsAt: end,
+      isActive: true,
+      maxTotalUses: 2,
+      usedCount: 1,
+      maxUsesPerUser: 1,
+      firstOrderOnly: false,
+      appliesTo: 'all' as const,
+      activeHours: { start: '11:00', end: '21:00' },
+    };
+
+    // Exact start/end timestamps are active; 1ms outside are inactive
+    expect(isCouponActiveAt(cpn, start)).toBe(true);
+    expect(isCouponActiveAt(cpn, end)).toBe(true);
+    expect(isCouponActiveAt(cpn, new Date(start.getTime() - 1))).toBe(false);
+    expect(isCouponActiveAt(cpn, new Date(end.getTime() + 1))).toBe(false);
+    // Istanbul activeHours window boundary (22:00 Istanbul = 19:00 UTC)
+    expect(isCouponActiveAt({ ...cpn, endsAt: new Date('2026-12-01T00:00:00Z') }, new Date('2026-11-11T19:00:00Z'))).toBe(false);
+    // Exact minOrderKurus equality accepted; 1 kuruş below returns null by default (strict=false)
+    const cpnCtx = {
+      subtotalKurus: 34000,
+      now: start,
+      userRedemptionsCount: 0,
+      userDeliveredOrdersCount: 0,
+      cartItems: [{ menuItemId: 'item-1', categoryId: 'cat-1' }],
+    };
+    expect(evaluateCouponForQuote(cpn, cpnCtx)?.discountKurus).toBe(4000);
+    expect(evaluateCouponForQuote(cpn, { ...cpnCtx, subtotalKurus: 33999 })).toBeNull();
+    // Undefined target lists safely reject matching categories/items without throwing
+    expect(evaluateCouponForQuote({ ...cpn, appliesTo: 'categories' }, cpnCtx)).toBeNull();
+    expect(evaluateCouponForQuote({ ...cpn, appliesTo: 'items' }, cpnCtx)).toBeNull();
+    // Exact totalKurus === minOrderKurusApplied is valid; 1 kuruş below fails; deliveryFee added; pickup ignores zone
+    const exactQuote = PricingDomain.calculateQuote({
+      input: { items: [{ menuItemId: 'item-1', quantity: 1, optionIds: ['opt-1'] }], orderType: 'delivery', now: start },
+      menuMap: baseMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
+      deliveryZone: { id: 'z1', name: 'Z', minOrderKurus: 35500, deliveryFeeKurus: 1500 },
+    });
+    expect(exactQuote.totalKurus).toBe(35500);
+    expect(exactQuote.isMinOrderMet).toBe(true);
+
+    const pickupWithZone = PricingDomain.calculateQuote({
+      input: { items: [{ menuItemId: 'item-1', quantity: 1, optionIds: ['opt-1'] }], orderType: 'pickup', now: start },
+      menuMap: baseMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
+      deliveryZone: { id: 'z1', name: 'Z', minOrderKurus: 999999, deliveryFeeKurus: 1500 },
+    });
+    expect(pickupWithZone.deliveryFeeKurus).toBe(0);
+    expect(pickupWithZone.minOrderKurusApplied).toBe(0);
+    expect(pickupWithZone.isMinOrderMet).toBe(true);
   });
 });
 

@@ -1,6 +1,9 @@
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import boundaries from 'eslint-plugin-boundaries';
+import { createRequire } from 'node:module';
+
+const req = createRequire(new URL('./backend/package.json', import.meta.url));
+const js = req('@eslint/js');
+const tseslint = req('typescript-eslint');
+const boundaries = req('eslint-plugin-boundaries');
 
 export default tseslint.config(
   {
@@ -49,3 +52,4 @@ export default tseslint.config(
     },
   },
 );
+

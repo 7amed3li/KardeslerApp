@@ -39,3 +39,7 @@ coverage/
 tmp/
 temp/
 pgdata/
+dump.rdb
+~$*
+.stryker-tmp/
+reports/

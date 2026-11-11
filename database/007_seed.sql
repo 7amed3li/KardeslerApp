@@ -1,10 +1,18 @@
 -- ============================================================================
--- Migration: 007_seed.sql (Real Kardeşler Cihangir Restaurant Data)
+-- Migration: 007_seed.sql (DEVELOPMENT/TEST PLACEHOLDER DATA ONLY)
 -- Project: Kardeşler Cihangir Food Ordering System
--- Description: Authentic seed data from the Kardeşler Cihangir official menu:
---              settings, staff, delivery zones, drivers, categories, items,
---              tags, option groups, and coupons.
+-- Description: Initial development/staging seed data (PLACEHOLDER credentials,
+--              sample staff passwords, delivery zones, drivers, categories,
+--              items, tags, option groups, and coupons).
+--              DO NOT execute against a live production database!
 -- ============================================================================
+
+DO $$
+BEGIN
+    IF current_setting('app.node_env', true) = 'production' THEN
+        RAISE EXCEPTION 'Refusing to run placeholder seed 007_seed.sql in production environment';
+    END IF;
+END $$;
 
 BEGIN;
 

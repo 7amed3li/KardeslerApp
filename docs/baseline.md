@@ -81,3 +81,4 @@ A brand-new PostgreSQL 16.14 + PostGIS 3.4.2 cluster (`/tmp/pg_baseline`) was in
 5. **`BackgroundJobsService` (`backend/src/jobs/background-jobs.service.ts`):** Not scheduled at all in `main.ts`; no Redis/BullMQ queue or worker exists.
 6. **`ConsoleSmsProvider.lastSentCodeByPhone` (`auth.service.ts` line 16):** In-memory `Map` (acceptable only as a test fake, never in production).
 7. **Idempotency & OTP state:** `otp_codes.attempts` and `orders.idempotency_key` are persisted in PostgreSQL, **not** in process memory, though HTTP `Idempotency-Key` replay currently exists only on `POST /api/v1/orders` via `create_order` and not as a shared Redis/port idempotency guard.
+
