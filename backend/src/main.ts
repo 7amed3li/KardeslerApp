@@ -5,7 +5,14 @@ import cookie from '@fastify/cookie';
 import { z } from 'zod';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { env } from './config/env.js';
-import { withRlsTx, readonlyClient, apiClient, schema } from './db/index.js';
+import {
+  withRlsTx,
+  readonlyClient,
+  apiClient,
+  schema,
+  verifyDbSecurityPosture,
+  closeDbPools,
+} from './db/index.js';
 import { AppError, registerGlobalErrorHandler } from './common/errors.js';
 import {
   rateLimiter,
@@ -93,15 +100,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.get('/readyz', async (_request, reply) => {
     try {
-      const [apiPing, roPing] = await Promise.all([
-        apiClient`SELECT current_user AS role_name`,
-        readonlyClient`SELECT current_user AS role_name`,
-      ]);
+      const posture = await verifyDbSecurityPosture();
       return reply.status(200).send({
         status: 'ready',
         dbRoles: {
-          api: apiPing[0]?.role_name,
-          readonly: roPing[0]?.role_name,
+          api: posture.api.roleName,
+          readonly: posture.readonly.roleName,
+        },
+        securityPosture: {
+          api: {
+            isSuperuser: posture.api.isSuperuser,
+            bypassRls: posture.api.bypassRls,
+            ownedPublicTables: posture.api.ownedPublicTables,
+          },
+          readonly: {
+            isSuperuser: posture.readonly.isSuperuser,
+            bypassRls: posture.readonly.bypassRls,
+            ownedPublicTables: posture.readonly.ownedPublicTables,
+          },
         },
       });
     } catch {
@@ -1455,11 +1471,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
 if (process.argv[1]?.endsWith('main.ts') || process.argv[1]?.endsWith('main.js')) {
   const server = buildApp();
-  server.listen({ port: env.PORT, host: env.HOST }, (err, address) => {
-    if (err) {
-      server.log.error(err);
+  verifyDbSecurityPosture()
+    .then(() => server.listen({ port: env.PORT, host: env.HOST }))
+    .then((address) => {
+      console.log(`Kardeşler Cihangir Backend API running at ${address}`);
+    })
+    .catch(async (err) => {
+      server.log.fatal({ err }, 'Startup failed security posture or listen check');
+      await closeDbPools();
       process.exit(1);
-    }
-    console.log(`🚀 Kardeşler Cihangir Backend API running at ${address}`);
-  });
+    });
+
+  const shutdown = async () => {
+    await server.close();
+    await closeDbPools();
+    process.exit(0);
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
