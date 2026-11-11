@@ -5,8 +5,6 @@ const EnvSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(4000),
     HOST: z.string().default('0.0.0.0'),
-
-    // Database Connections (least-privilege roles by default, NEVER superuser)
     DATABASE_URL: z
       .string()
       .min(10)
@@ -15,23 +13,24 @@ const EnvSchema = z
       .string()
       .min(10)
       .default('postgresql://app_readonly:readonly_dev_secret_change_me@127.0.0.1:5434/kardesler_db'),
-
-    // Redis (optional in dev/test; falls back to in-memory rate limit & pub/sub)
-    REDIS_URL: z.string().optional(),
-
-    // Distinct Cryptographic Secrets (>= 32 chars required)
+    REDIS_URL: z.string().default('redis://127.0.0.1:6379'),
+    JWT_KEY_ID: z.string().min(2).default('k1'),
+    JWT_PREVIOUS_KEY_ID: z.string().optional(),
     JWT_CUSTOMER_SECRET: z
       .string()
       .min(32)
       .default('dev_customer_secret_key_change_me_in_production_12345'),
+    JWT_CUSTOMER_PREVIOUS_SECRET: z.string().min(32).optional(),
     JWT_STAFF_SECRET: z
       .string()
       .min(32)
       .default('dev_staff_secret_key_change_me_in_production_67890'),
+    JWT_STAFF_PREVIOUS_SECRET: z.string().min(32).optional(),
     JWT_PRINT_SECRET: z
       .string()
       .min(32)
       .default('dev_print_agent_secret_key_change_me_production_abcde'),
+    JWT_PRINT_PREVIOUS_SECRET: z.string().min(32).optional(),
     OTP_HMAC_SECRET: z
       .string()
       .min(32)
@@ -44,16 +43,12 @@ const EnvSchema = z
       .string()
       .min(32)
       .default('dev_payment_webhook_hmac_secret_change_me_in_prod_777'),
-
-    // App Store / Play Store Review Demo Account (Disabled by default, forbidden in prod unless explicitly enabled)
     ALLOW_REVIEW_DEMO_OTP: z
       .enum(['true', 'false'])
       .default('false')
       .transform((v) => v === 'true'),
     REVIEW_DEMO_PHONE: z.string().default('+905000000000'),
     REVIEW_DEMO_OTP_CODE: z.string().default('145300'),
-
-    // CORS
     ADMIN_ORIGIN: z.string().default('http://localhost:5173'),
   })
   .superRefine((val, ctx) => {
@@ -81,6 +76,14 @@ const EnvSchema = z
           code: z.ZodIssueCode.custom,
           path: ['DATABASE_URL'],
           message: 'DATABASE_URL must never use the postgres superuser in production',
+        });
+      }
+
+      if (!val.REDIS_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['REDIS_URL'],
+          message: 'REDIS_URL is required in production',
         });
       }
     }

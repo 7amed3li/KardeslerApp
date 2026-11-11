@@ -9,7 +9,7 @@ import {
   withTx,
   schema,
   closeDbPools,
-} from '../src/db/index.js';
+} from '../src/infrastructure/db/client.js';
 import { env } from '../src/config/env.js';
 
 describe('Step 2: Database Connection Security Posture & RLS Isolation', () => {

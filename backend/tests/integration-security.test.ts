@@ -1,16 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { authenticator } from 'otplib';
-import { buildApp } from '../src/main.js';
+import { createAppContainer } from '../src/composition-root.js';
 import { parseEnv } from '../src/config/env.js';
-import { AuthService, ConsoleSmsProvider } from '../src/modules/auth/auth.service.js';
-import { computeWebhookSignature } from '../src/modules/payments/payment.service.js';
-import { rateLimiter } from '../src/common/security.js';
-import { withRlsTx, closeDbPools } from '../src/db/index.js';
+import { env } from '../src/config/env.js';
+import { ConsoleSmsProvider } from '../src/infrastructure/providers/sms.providers.js';
+import { computeWebhookHmac } from '../src/infrastructure/providers/payment.providers.js';
+import { NodeCryptoService } from '../src/infrastructure/security/crypto.adapter.js';
+import { withTx, schema } from '../src/infrastructure/db/client.js';
 import { sql } from 'drizzle-orm';
 
 describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Security Suite', () => {
   const smsProvider = new ConsoleSmsProvider();
-  const app = buildApp({ smsProvider });
+  const container = createAppContainer({ smsProvider });
+  const app = container.app;
+  const cryptoSvc = new NodeCryptoService(env.OTP_HMAC_SECRET, env.TOTP_ENCRYPTION_KEY);
+  const computeWebhookSignature = (id: string, oid: string, amt: number, st: 'paid' | 'failed') =>
+    computeWebhookHmac(id, oid, amt, st, env.WEBHOOK_HMAC_SECRET);
 
   let aliceToken = '';
   let aliceRefreshToken = '';
@@ -29,15 +34,15 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
 
   beforeAll(async () => {
     await app.ready();
-    rateLimiter.resetAll();
+    await container.rateLimiter.resetAll();
 
     // Prepare deterministic test state in DB using system context on app_api
-    const ownerPwdHash = await AuthService.hashPassword('OwnerSecretPass!2026');
-    const staffPwdHash = await AuthService.hashPassword('StaffSecretPass!2026');
-    const staffTotpSecret = AuthService.generateTotpSecret();
-    const staffTotpEncrypted = AuthService.encryptTotpSecret(staffTotpSecret);
+    const ownerPwdHash = await cryptoSvc.hashPassword('OwnerSecretPass!2026');
+    const staffPwdHash = await cryptoSvc.hashPassword('StaffSecretPass!2026');
+    const staffTotpSecret = cryptoSvc.generateTotpSecret();
+    const staffTotpEncrypted = cryptoSvc.encryptTotpSecret(staffTotpSecret);
 
-    await withRlsTx({ role: 'system' }, async (tx) => {
+    await withTx({ role: 'system' }, async (tx) => {
       // Reset restaurant settings to accepting orders & clear stale heartbeats
       await tx.execute(sql`
         UPDATE public.restaurant_settings
@@ -77,13 +82,13 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
       `);
     });
 
-    staffToken = AuthService.generateStaffToken('a0000000-0000-0000-0000-000000000002', 'staff')
-      .accessToken;
+    staffToken = (
+      await container.tokens.signStaffToken('a0000000-0000-0000-0000-000000000002', 'staff')
+    ).accessToken;
   });
 
   afterAll(async () => {
-    await app.close();
-    await closeDbPools();
+    await container.shutdown();
   });
 
   // ==========================================================================
@@ -302,7 +307,7 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
     const idemKey = `slice-card-order-${Date.now()}`;
 
     // Reset HOSGELDIN redemptions for Alice before placing order
-    await withRlsTx({ role: 'system' }, async (tx) => {
+    await withTx({ role: 'system' }, async (tx) => {
       await tx.execute(
         sql`DELETE FROM public.coupon_redemptions WHERE user_id = ${aliceUserId}::uuid`,
       );

@@ -1,22 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { PricingEngine, type MenuItemPricingData, type CouponData } from '../src/modules/pricing/pricing.service.js';
+import { PricingDomain, type PricedMenuItem } from '../src/domain/pricing/pricing.domain.js';
+import type { CouponRule } from '../src/domain/coupons/coupon.domain.js';
 
-describe('PricingEngine Unit Tests', () => {
-  const sampleMenu: Map<string, MenuItemPricingData> = new Map([
+describe('PricingDomain Unit Tests', () => {
+  const now = new Date();
+  const sampleMenu: Map<string, PricedMenuItem> = new Map([
     [
       'item-adana-1',
       {
         id: 'item-adana-1',
+        categoryId: 'cat-1',
         name: 'Adana Kebap',
-        priceKurus: 34000, // 340 TL
+        priceKurus: 34000,
         vatRatePercent: 1,
         isAvailable: true,
+        optionGroups: [],
         options: [
           {
             id: 'opt-portion-1.5',
             groupId: 'grp-portion',
             name: '1.5 Porsiyon',
-            priceDeltaKurus: 16000, // +160 TL
+            priceDeltaKurus: 16000,
             isAvailable: true,
           },
         ],
@@ -26,152 +30,138 @@ describe('PricingEngine Unit Tests', () => {
       'item-sold-out',
       {
         id: 'item-sold-out',
+        categoryId: 'cat-1',
         name: 'Künefe',
         priceKurus: 18000,
         vatRatePercent: 1,
-        isAvailable: false, // Out of stock
+        isAvailable: false,
+        optionGroups: [],
         options: [],
       },
     ],
   ]);
 
   it('correctly calculates basic order subtotal in integer kuruş', () => {
-    const res = PricingEngine.calculate(
-      {
-        items: [{ menu_item_id: 'item-adana-1', quantity: 2, option_ids: [] }],
-        order_type: 'delivery',
+    const res = PricingDomain.calculateQuote({
+      input: {
+        items: [{ menuItemId: 'item-adana-1', quantity: 2, optionIds: [] }],
+        orderType: 'delivery',
+        now,
       },
-      sampleMenu,
-      true,
-      true,
-      null,
-      { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
-    );
-
-    expect(res.subtotal_kurus).toBe(68000); // 340 * 2 = 680 TL
-    expect(res.discount_kurus).toBe(0);
-    expect(res.delivery_fee_kurus).toBe(0);
-    expect(res.total_kurus).toBe(68000);
-    expect(res.is_min_order_met).toBe(true);
+      menuMap: sampleMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
+      deliveryZone: { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
+    });
+    expect(res.subtotalKurus).toBe(68000);
+    expect(res.discountKurus).toBe(0);
+    expect(res.deliveryFeeKurus).toBe(0);
+    expect(res.totalKurus).toBe(68000);
+    expect(res.isMinOrderMet).toBe(true);
   });
 
   it('correctly adds option price deltas to item unit price', () => {
-    const res = PricingEngine.calculate(
-      {
-        items: [
-          {
-            menu_item_id: 'item-adana-1',
-            quantity: 1,
-            option_ids: ['opt-portion-1.5'],
-          },
-        ],
-        order_type: 'delivery',
+    const res = PricingDomain.calculateQuote({
+      input: {
+        items: [{ menuItemId: 'item-adana-1', quantity: 1, optionIds: ['opt-portion-1.5'] }],
+        orderType: 'delivery',
+        now,
       },
-      sampleMenu,
-      true,
-      true,
-      null,
-      { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
-    );
-
-    expect(res.subtotal_kurus).toBe(50000); // 340 + 160 = 500 TL
-    expect(res.total_kurus).toBe(50000);
+      menuMap: sampleMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
+      deliveryZone: { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
+    });
+    expect(res.subtotalKurus).toBe(50000);
+    expect(res.totalKurus).toBe(50000);
   });
 
   it('applies percentage coupon up to maximum discount cap', () => {
-    const coupon: CouponData = {
+    const coupon: CouponRule = {
       id: 'coupon-1',
       code: 'HOSGELDIN',
       type: 'percent',
-      value: 20, // 20%
-      maxDiscountKurus: 10000, // Max 100 TL
+      value: 20,
+      maxDiscountKurus: 10000,
       minOrderKurus: 30000,
-      startsAt: new Date(Date.now() - 10000),
-      endsAt: new Date(Date.now() + 100000),
+      startsAt: new Date(now.getTime() - 10000),
+      endsAt: new Date(now.getTime() + 100000),
       isActive: true,
       usedCount: 0,
     };
-
-    // Subtotal: 680 TL. 20% of 680 = 136 TL. Capped at 100 TL (10000 kuruş).
-    const res = PricingEngine.calculate(
-      {
-        items: [{ menu_item_id: 'item-adana-1', quantity: 2, option_ids: [] }],
-        coupon_code: 'HOSGELDIN',
-        order_type: 'delivery',
+    const res = PricingDomain.calculateQuote({
+      input: {
+        items: [{ menuItemId: 'item-adana-1', quantity: 2, optionIds: [] }],
+        orderType: 'delivery',
+        now,
       },
-      sampleMenu,
-      true,
-      true,
+      menuMap: sampleMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
       coupon,
-      { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
-    );
-
-    expect(res.subtotal_kurus).toBe(68000);
-    expect(res.discount_kurus).toBe(10000); // Max cap applied
-    expect(res.total_kurus).toBe(58000); // 680 - 100 = 580 TL
+      deliveryZone: { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
+    });
+    expect(res.subtotalKurus).toBe(68000);
+    expect(res.discountKurus).toBe(10000);
+    expect(res.totalKurus).toBe(58000);
   });
 
   it('enforces minimum order spend AFTER discount is deducted', () => {
-    const fixedCoupon: CouponData = {
+    const fixedCoupon: CouponRule = {
       id: 'coupon-fixed',
       code: 'INDIRIM150',
       type: 'fixed_amount',
-      value: 15000, // 150 TL discount
+      value: 15000,
       minOrderKurus: 30000,
-      startsAt: new Date(Date.now() - 10000),
-      endsAt: new Date(Date.now() + 100000),
+      startsAt: new Date(now.getTime() - 10000),
+      endsAt: new Date(now.getTime() + 100000),
       isActive: true,
       usedCount: 0,
     };
-
-    // Item subtotal = 340 TL. Discount = 150 TL. Total = 190 TL.
-    // Minimum zone spend = 250 TL.
-    // Result: Minimum order is NOT met after discount!
-    const res = PricingEngine.calculate(
-      {
-        items: [{ menu_item_id: 'item-adana-1', quantity: 1, option_ids: [] }],
-        coupon_code: 'INDIRIM150',
-        order_type: 'delivery',
+    const res = PricingDomain.calculateQuote({
+      input: {
+        items: [{ menuItemId: 'item-adana-1', quantity: 1, optionIds: [] }],
+        orderType: 'delivery',
+        now,
       },
-      sampleMenu,
-      true,
-      true,
-      fixedCoupon,
-      { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
-    );
-
-    expect(res.subtotal_kurus).toBe(34000);
-    expect(res.discount_kurus).toBe(15000);
-    expect(res.total_kurus).toBe(19000);
-    expect(res.is_min_order_met).toBe(false);
-    expect(res.min_order_shortfall_kurus).toBe(6000); // 250 - 190 = 60 TL shortfall
+      menuMap: sampleMenu,
+      isRestaurantOpen: true,
+      isAcceptingOrders: true,
+      coupon: fixedCoupon,
+      deliveryZone: { id: 'zone-1', name: 'Cihangir', minOrderKurus: 25000, deliveryFeeKurus: 0 },
+    });
+    expect(res.totalKurus).toBe(19000);
+    expect(res.isMinOrderMet).toBe(false);
+    expect(res.minOrderShortfallKurus).toBe(6000);
   });
 
   it('rejects order when item is out of stock', () => {
-    expect(() => {
-      PricingEngine.calculate(
-        {
-          items: [{ menu_item_id: 'item-sold-out', quantity: 1, option_ids: [] }],
-          order_type: 'delivery',
+    expect(() =>
+      PricingDomain.calculateQuote({
+        input: {
+          items: [{ menuItemId: 'item-sold-out', quantity: 1, optionIds: [] }],
+          orderType: 'delivery',
+          now,
         },
-        sampleMenu,
-        true,
-        true,
-      );
-    }).toThrowError(/tükenmiştir/);
+        menuMap: sampleMenu,
+        isRestaurantOpen: true,
+        isAcceptingOrders: true,
+      }),
+    ).toThrowError(/mevcut değil/);
   });
 
   it('rejects order when restaurant has paused intake', () => {
-    expect(() => {
-      PricingEngine.calculate(
-        {
-          items: [{ menu_item_id: 'item-adana-1', quantity: 1, option_ids: [] }],
-          order_type: 'delivery',
+    expect(() =>
+      PricingDomain.calculateQuote({
+        input: {
+          items: [{ menuItemId: 'item-adana-1', quantity: 1, optionIds: [] }],
+          orderType: 'delivery',
+          now,
         },
-        sampleMenu,
-        true,
-        false, // Orders paused
-      );
-    }).toThrowError(/kabul etmemektedir/);
+        menuMap: sampleMenu,
+        isRestaurantOpen: true,
+        isAcceptingOrders: false,
+      }),
+    ).toThrowError(/kabul etmiyor/);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OrderStateMachine } from '../src/modules/orders/order-state-machine.js';
+import { OrderStateMachine } from '../src/domain/orders/order-state-machine.js';
 
 describe('OrderStateMachine Unit Tests', () => {
   it('allows valid standard delivery lifecycle chain', () => {
@@ -23,15 +23,14 @@ describe('OrderStateMachine Unit Tests', () => {
     expect(OrderStateMachine.isTerminal('delivered')).toBe(true);
     expect(OrderStateMachine.isTerminal('cancelled')).toBe(true);
     expect(OrderStateMachine.isTerminal('rejected')).toBe(true);
-
     expect(OrderStateMachine.canTransition('delivered', 'cancelled')).toBe(false);
     expect(OrderStateMachine.canTransition('delivered', 'new')).toBe(false);
     expect(OrderStateMachine.canTransition('cancelled', 'accepted')).toBe(false);
   });
 
-  it('assertTransition throws exception on invalid transitions', () => {
-    expect(() => {
-      OrderStateMachine.assertTransition('delivered', 'new');
-    }).toThrowError(/Geçersiz sipariş durum geçişi/);
+  it('assertTransition throws DomainError on invalid transitions', () => {
+    expect(() => OrderStateMachine.assertTransition('delivered', 'new')).toThrowError(
+      /Geçersiz sipariş durum geçişi/,
+    );
   });
 });

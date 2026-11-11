@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { authenticator } from 'otplib';
-import { buildApp } from '../src/main.js';
-import { AuthService, ConsoleSmsProvider } from '../src/modules/auth/auth.service.js';
-import { computeWebhookSignature } from '../src/modules/payments/payment.service.js';
-import { rateLimiter } from '../src/common/security.js';
-import { withTx, closeDbPools } from '../src/db/index.js';
+import { createAppContainer } from '../src/composition-root.js';
+import { ConsoleSmsProvider } from '../src/infrastructure/providers/sms.providers.js';
+import { computeWebhookHmac } from '../src/infrastructure/providers/payment.providers.js';
+import { NodeCryptoService } from '../src/infrastructure/security/crypto.adapter.js';
+import { env } from '../src/config/env.js';
+import { withTx, schema } from '../src/infrastructure/db/client.js';
 import { sql } from 'drizzle-orm';
 
-describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before Refactor', () => {
+describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before/After Refactor', () => {
   const smsProvider = new ConsoleSmsProvider();
-  const app = buildApp({ smsProvider });
+  const container = createAppContainer({ smsProvider });
+  const app = container.app;
+  const cryptoSvc = new NodeCryptoService(env.OTP_HMAC_SECRET, env.TOTP_ENCRYPTION_KEY);
+  const computeWebhookSignature = (id: string, oid: string, amt: number, st: 'paid' | 'failed') =>
+    computeWebhookHmac(id, oid, amt, st, env.WEBHOOK_HMAC_SECRET);
 
   const suffix = String(Date.now()).slice(-7);
   const custPhone = `+90531${suffix}`;
@@ -27,12 +32,12 @@ describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before
 
   beforeAll(async () => {
     await app.ready();
-    rateLimiter.resetAll();
+    await container.rateLimiter.resetAll();
 
-    const ownerHash = await AuthService.hashPassword('OwnerCharPass!2026');
-    const staffHash = await AuthService.hashPassword('StaffCharPass!2026');
-    const staffSecret = AuthService.generateTotpSecret();
-    const staffEnc = AuthService.encryptTotpSecret(staffSecret);
+    const ownerHash = await cryptoSvc.hashPassword('OwnerCharPass!2026');
+    const staffHash = await cryptoSvc.hashPassword('StaffCharPass!2026');
+    const staffSecret = cryptoSvc.generateTotpSecret();
+    const staffEnc = cryptoSvc.encryptTotpSecret(staffSecret);
 
     await withTx({ role: 'system' }, async (tx) => {
       await tx.execute(sql`
@@ -65,9 +70,8 @@ describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before
       `);
     });
 
-    staffToken = AuthService.generateStaffToken(
-      'a0000000-0000-0000-0000-000000000002',
-      'staff',
+    staffToken = (
+      await container.tokens.signStaffToken('a0000000-0000-0000-0000-000000000002', 'staff')
     ).accessToken;
   });
 
@@ -78,8 +82,7 @@ describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before
         sql`UPDATE public.restaurant_settings SET is_accepting_orders = true WHERE id = 1`,
       );
     });
-    await app.close();
-    await closeDbPools();
+    await container.shutdown();
   });
 
   it('pins health, readiness, and docs endpoints', async () => {
@@ -326,7 +329,7 @@ describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before
         orderId: createdOrderId,
         amountKurus: 27200,
         status: 'paid',
-        providerRef: 'char_ref',
+        providerRef: `char_ref_${Date.now()}`,
         signature: sig,
       },
     });
