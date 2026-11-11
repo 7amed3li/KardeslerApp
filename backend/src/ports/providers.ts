@@ -85,3 +85,4 @@ export interface CryptoServicePort {
   generateTotpSecret(): string;
   verifyTotpCode(plainSecret: string, code: string): boolean;
 }
+

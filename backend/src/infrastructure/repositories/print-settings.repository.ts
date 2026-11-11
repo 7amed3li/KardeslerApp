@@ -15,7 +15,7 @@ export class PostgresPrintRepository implements PrintRepository {
         .from(schema.printJobs)
         .where(eq(schema.printJobs.status, 'pending'))
         .orderBy(schema.printJobs.createdAt)
-        .limit(10);
+        .limit(100);
 
       const results = [];
       for (const job of pendingJobs) {
@@ -133,3 +133,4 @@ export class PostgresSettingsRepository implements SettingsRepository {
     });
   }
 }
+

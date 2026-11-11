@@ -8,3 +8,4 @@ export interface IdGenerator {
   randomHex(bytes: number): string;
   randomDigits6(): string;
 }
+

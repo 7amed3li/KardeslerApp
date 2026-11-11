@@ -172,3 +172,4 @@ export const auditLogs = pgTable('audit_logs', {
   ip: inet('ip'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+

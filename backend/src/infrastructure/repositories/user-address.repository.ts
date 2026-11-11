@@ -144,8 +144,8 @@ export class PostgresAddressRepository implements AddressRepository {
   async softDeleteForCustomer(userId: string, addressId: string): Promise<boolean> {
     return withTx({ role: 'customer', userId }, async (tx) => {
       const rows = await tx.execute<{ id: string }>(sql`
-        UPDATE public.addresses SET deleted_at = clock_timestamp()
-        WHERE id = ${addressId}::uuid AND user_id = ${userId}::uuid AND deleted_at IS NULL
+        DELETE FROM public.addresses
+        WHERE id = ${addressId}::uuid AND user_id = ${userId}::uuid
         RETURNING id
       `);
       return rows.length > 0;

@@ -133,3 +133,4 @@ export const priceHistory = pgTable('price_history', {
   changedByStaffId: uuid('changed_by_staff_id').references(() => staffUsers.id),
   changedAt: timestamp('changed_at', { withTimezone: true }).defaultNow().notNull(),
 });
+

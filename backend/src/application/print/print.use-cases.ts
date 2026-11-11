@@ -76,3 +76,4 @@ export class PrintAndRealtimeUseCases {
     return this.eventBus.subscribe(listener, lastEventId);
   }
 }
+

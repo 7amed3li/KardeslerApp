@@ -28,3 +28,4 @@ export class PaymentDomain {
     return paymentMethod === 'card_online' && paymentStatus === 'paid';
   }
 }
+

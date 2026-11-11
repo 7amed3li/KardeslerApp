@@ -121,15 +121,27 @@ export class PostgresOrderRepository implements OrderRepository {
 
   async cancelCustomerOrder(userId: string, orderId: string, reason: string) {
     return withTx({ role: 'customer', userId, actorType: 'customer', actorId: userId }, async (tx) => {
-      const [existing] = await tx.select().from(schema.orders).where(eq(schema.orders.id, orderId)).limit(1);
+      // Plain SELECT uses FOR SELECT RLS so we distinguish missing/foreign (404) from non-cancellable state (409)
+      const [existing] = await tx.select({ id: schema.orders.id, status: schema.orders.status }).from(schema.orders).where(eq(schema.orders.id, orderId)).limit(1);
       if (!existing) throw new DomainError('NOT_FOUND', 404, 'Sipariş bulunamadı');
       OrderStateMachine.assertCustomerCanCancel(existing.status as OrderStatus);
+
+      // Acquire row lock; if staff transitioned state concurrently, pol_orders_customer_cancel filters the row out
+      const locked = await tx.execute<{ id: string; status: string }>(sql`
+        SELECT id, status FROM public.orders WHERE id = ${orderId}::uuid FOR UPDATE
+      `);
+      if (locked.length === 0) {
+        throw new DomainError('INVALID_STATE_TRANSITION', 409, 'Sipariş artık iptal edilemez');
+      }
 
       const [updated] = await tx
         .update(schema.orders)
         .set({ status: 'cancelled', cancelReason: reason })
         .where(eq(schema.orders.id, orderId))
         .returning();
+      if (!updated) {
+        throw new DomainError('INVALID_STATE_TRANSITION', 409, 'Sipariş artık iptal edilemez');
+      }
 
       const [pay] = await tx.select().from(schema.payments).where(eq(schema.payments.orderId, orderId)).limit(1);
       return { order: toSummary(updated), wasPaidCard: pay?.method === 'card_online' && pay?.status === 'paid' };
@@ -178,6 +190,12 @@ export class PostgresOrderRepository implements OrderRepository {
     now: Date;
   }) {
     return withTx({ role: params.role, staffId: params.staffId, actorType: 'staff', actorId: params.staffId }, async (tx) => {
+      const locked = await tx.execute<{ id: string; status: string }>(sql`
+        SELECT id, status FROM public.orders WHERE id = ${params.orderId}::uuid FOR UPDATE
+      `);
+      if (locked.length === 0) throw new DomainError('NOT_FOUND', 404, 'Sipariş bulunamadı');
+      OrderStateMachine.assertTransition(locked[0].status as OrderStatus, params.toStatus);
+
       const [order] = await tx
         .update(schema.orders)
         .set({ status: params.toStatus, ...(params.cancelReason ? { cancelReason: params.cancelReason } : {}) })
@@ -220,3 +238,4 @@ export class PostgresOrderRepository implements OrderRepository {
     });
   }
 }
+

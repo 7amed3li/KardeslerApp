@@ -86,3 +86,4 @@ export class AdminUseCases {
     return this.adminRepo.updateSettings(staffId, patch);
   }
 }
+

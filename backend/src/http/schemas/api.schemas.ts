@@ -250,3 +250,4 @@ export const AdminUpdateSettingsSchema = z.object({
   paymentTimeoutMinutes: z.number().int().positive().optional(),
   heartbeatGraceSeconds: z.number().int().positive().optional(),
 }).strict();
+

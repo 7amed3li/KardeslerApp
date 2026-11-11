@@ -50,3 +50,4 @@ export function registerHealthRoutes(
     return reply.status(200).send(app.swagger());
   });
 }
+

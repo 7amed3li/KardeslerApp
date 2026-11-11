@@ -8,3 +8,4 @@ export function createRedisConnection(redisUrl: string, keyPrefix = 'kardesler:'
     lazyConnect: false,
   });
 }
+

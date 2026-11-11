@@ -31,6 +31,18 @@ function mapPgConstraintMessage(pgMessage: string, requestId: string): { status:
   };
 }
 
+function extractPgError(err: unknown): { code?: string; message: string } {
+  let cur: any = err;
+  let code: string | undefined;
+  const messages: string[] = [];
+  for (let depth = 0; depth < 5 && cur && typeof cur === 'object'; depth++) {
+    if (!code && typeof cur.code === 'string') code = cur.code;
+    if (typeof cur.message === 'string') messages.push(cur.message);
+    cur = cur.cause;
+  }
+  return { code, message: messages.reverse().join(' | ') };
+}
+
 export function registerHttpErrorMapper(app: FastifyInstance): void {
   app.setErrorHandler((err: any, request, reply) => {
     const requestId = request.id;
@@ -56,8 +68,17 @@ export function registerHttpErrorMapper(app: FastifyInstance): void {
       });
     }
 
-    const pgCode: string | undefined = err?.code ?? err?.cause?.code;
-    const pgMessage = String(err?.message ?? err?.cause?.message ?? '');
+    const { code: pgCode, message: pgMessage } = extractPgError(err);
+
+    if (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500) {
+      return reply.status(err.statusCode).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: err.statusCode === 413 ? 'İstek boyutu sınırı aşıldı' : 'Geçersiz HTTP isteği',
+          requestId,
+        },
+      });
+    }
 
     if (pgCode === '42501') {
       return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Bu işlem için yetkiniz bulunmuyor', requestId } });
@@ -65,12 +86,15 @@ export function registerHttpErrorMapper(app: FastifyInstance): void {
     if (pgCode === 'P0002') {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'İstenen kayıt bulunamadı', requestId } });
     }
-    if (pgCode === '23514' || pgCode === '22023' || pgCode === '23000') {
+    if (pgCode === 'P0001' || pgCode === '23514' || pgCode === '22023' || pgCode === '23000') {
       const mapped = mapPgConstraintMessage(pgMessage, requestId);
       return reply.status(mapped.status).send(mapped.body);
     }
     if (pgCode === '23505') {
       return reply.status(409).send({ error: { code: 'CONFLICT', message: 'Bu kayıt zaten mevcut', requestId } });
+    }
+    if (pgCode === '23503') {
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'İlişkili kayıt bulunamadı', requestId } });
     }
 
     request.log.error({ err: { name: err?.name, code: pgCode } }, 'Unhandled error');
@@ -79,3 +103,4 @@ export function registerHttpErrorMapper(app: FastifyInstance): void {
     });
   });
 }
+

@@ -41,6 +41,7 @@ export interface HttpServerDeps {
   loyalty: LoyaltyUseCases;
   printRt: PrintAndRealtimeUseCases;
   admin: AdminUseCases;
+  onRoute?: (method: string, url: string) => void;
 }
 
 const REDACT_PATHS = [
@@ -67,6 +68,14 @@ function createFastifyBase(deps: HttpServerDeps): FastifyInstance {
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  if (deps.onRoute) {
+    app.addHook('onRoute', (route) => {
+      const methods = Array.isArray(route.method) ? route.method : [route.method];
+      for (const m of methods) {
+        if (m !== 'HEAD' && m !== 'OPTIONS' && route.url !== '*') deps.onRoute!(m, route.url);
+      }
+    });
+  }
   app.register(helmet, { contentSecurityPolicy: false });
   app.register(cors, { origin: [deps.adminOrigin, 'http://localhost:3000', 'http://localhost:8081'], credentials: true });
   app.register(cookie);
@@ -98,3 +107,4 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
   registerAdminRoutes(app, deps.admin, deps.authHooks);
   return app;
 }
+

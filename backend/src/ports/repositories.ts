@@ -278,3 +278,4 @@ export interface BackgroundJobRepository {
   listFailedNotifications(limit?: number): Promise<{ id: string; pushToken: string; title: string; body: string; data: unknown }[]>;
   markNotificationRetryResult(id: string, success: boolean, ticketIdOrReason: string, now: Date): Promise<void>;
 }
+

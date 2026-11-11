@@ -6,3 +6,4 @@ export class PostgresHealthAdapter implements DbHealthPort {
     return verifyDbSecurityPosture();
   }
 }
+

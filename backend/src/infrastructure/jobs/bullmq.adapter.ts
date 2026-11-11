@@ -66,3 +66,4 @@ export class BullMqJobAdapter implements JobQueuePort {
     this.queue = null;
   }
 }
+

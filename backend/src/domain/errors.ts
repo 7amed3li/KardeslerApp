@@ -30,3 +30,4 @@ export class DomainError extends Error {
     this.details = details;
   }
 }
+

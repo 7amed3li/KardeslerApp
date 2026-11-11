@@ -106,3 +106,4 @@ export class ThermalTicketDomain {
     return { textTr, escPosBase64: Buffer.concat([headerCmd, bodyBytes, cutCmd]).toString('base64') };
   }
 }
+
