@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: kardesler_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kardesler_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/001_extensions_and_roles.sql:/docker-entrypoint-initdb.d/001_extensions_and_roles.sql:ro
+      - ./database/002_core.sql:/docker-entrypoint-initdb.d/002_core.sql:ro
+      - ./database/003_menu.sql:/docker-entrypoint-initdb.d/003_menu.sql:ro
+      - ./database/004_orders.sql:/docker-entrypoint-initdb.d/004_orders.sql:ro
+      - ./database/005_promotions.sql:/docker-entrypoint-initdb.d/005_promotions.sql:ro
+      - ./database/006_security_rls.sql:/docker-entrypoint-initdb.d/006_security_rls.sql:ro
+      - ./database/007_seed.sql:/docker-entrypoint-initdb.d/007_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kardesler_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kardesler_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

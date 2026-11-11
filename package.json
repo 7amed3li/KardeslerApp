@@ -1,0 +1,21 @@
+{
+  "name": "kardesler-app-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kardeşler Cihangir Food Ordering System Monorepo",
+  "packageManager": "pnpm@10.11.1",
+  "scripts": {
+    "check": "pnpm --filter @kardesler/shared build && pnpm -r --parallel run check",
+    "lint": "pnpm -r --parallel run lint",
+    "typecheck": "pnpm -r --parallel run typecheck",
+    "test": "pnpm -r --parallel run test",
+    "build": "pnpm -r run build",
+    "db:migrate": "psql -U postgres -d kardesler_db -f database/001_extensions_and_roles.sql && psql -U postgres -d kardesler_db -f database/002_core.sql && psql -U postgres -d kardesler_db -f database/003_menu.sql && psql -U postgres -d kardesler_db -f database/004_orders.sql && psql -U postgres -d kardesler_db -f database/005_promotions.sql && psql -U postgres -d kardesler_db -f database/006_security_rls.sql && psql -U postgres -d kardesler_db -f database/007_seed.sql",
+    "db:test": "psql -U postgres -d kardesler_db -f database/tests.sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "prettier": "^3.5.2",
+    "eslint": "^9.20.1"
+  }
+}

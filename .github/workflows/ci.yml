@@ -1,0 +1,75 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  verify:
+    name: Lint, Typecheck, Test, and Audit
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_DB: kardesler_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_dev_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.1
+
+      - name: Verify Database Migrations & Run SQL Tests
+        env:
+          PGPASSWORD: postgres_dev_password
+        run: |
+          for f in 001_extensions_and_roles.sql 002_core.sql 003_menu.sql 004_orders.sql 005_promotions.sql 006_security_rls.sql 007_seed.sql; do
+            psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/$f
+          done
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests.sql
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Secret Detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Monorepo Verification (Lint, Typecheck, Test)
+        run: pnpm check
+
+      - name: Production Dependency Audit
+        run: pnpm audit --prod
