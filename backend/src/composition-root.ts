@@ -66,9 +66,9 @@ function buildStateAdapters(useInMemory: boolean) {
       bullRedis: null as Redis | null,
     };
   }
-  const cmd = createRedisConnection(env.REDIS_URL);
-  const sub = createRedisConnection(env.REDIS_URL);
-  const bull = createRedisConnection(env.REDIS_URL, '');
+  const cmd = createRedisConnection(env.REDIS_URL, 'kardesler:', true);
+  const sub = createRedisConnection(env.REDIS_URL, 'kardesler:', true);
+  const bull = createRedisConnection(env.REDIS_URL, '', false);
   return {
     redisClients: [cmd, sub, bull],
     rateLimiter: new RedisRateLimiter(cmd),

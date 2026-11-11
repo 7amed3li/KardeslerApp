@@ -43,6 +43,30 @@ function extractPgError(err: unknown): { code?: string; message: string } {
   return { code, message: messages.reverse().join(' | ') };
 }
 
+function mapPgAndInfraError(err: any, requestId: string): { status: number; body: Record<string, unknown>; pgCode?: string } | null {
+  const { code: pgCode, message: pgMessage } = extractPgError(err);
+  if (
+    err?.name === 'MaxRetriesPerRequestError' ||
+    pgMessage.includes("Stream isn't writeable") ||
+    pgMessage.includes('Connection is closed') ||
+    pgMessage.includes('Command timed out') ||
+    pgCode === 'ECONNREFUSED'
+  ) {
+    return { status: 503, body: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Gerçek zamanlı servis veya önbellek geçici olarak erişilemiyor', requestId } }, pgCode };
+  }
+  if (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500) {
+    return { status: err.statusCode, body: { error: { code: 'VALIDATION_ERROR', message: err.statusCode === 413 ? 'İstek boyutu sınırı aşıldı' : 'Geçersiz HTTP isteği', requestId } }, pgCode };
+  }
+  if (pgCode === '42501') return { status: 403, body: { error: { code: 'FORBIDDEN', message: 'Bu işlem için yetkiniz bulunmuyor', requestId } }, pgCode };
+  if (pgCode === 'P0002') return { status: 404, body: { error: { code: 'NOT_FOUND', message: 'İstenen kayıt bulunamadı', requestId } }, pgCode };
+  if (pgCode === 'P0001' || pgCode === '23514' || pgCode === '22023' || pgCode === '23000') {
+    return { ...mapPgConstraintMessage(pgMessage, requestId), pgCode };
+  }
+  if (pgCode === '23505') return { status: 409, body: { error: { code: 'CONFLICT', message: 'Bu kayıt zaten mevcut', requestId } }, pgCode };
+  if (pgCode === '23503') return { status: 400, body: { error: { code: 'VALIDATION_ERROR', message: 'İlişkili kayıt bulunamadı', requestId } }, pgCode };
+  return null;
+}
+
 export function registerHttpErrorMapper(app: FastifyInstance): void {
   app.setErrorHandler((err: any, request, reply) => {
     const requestId = request.id;
@@ -68,35 +92,10 @@ export function registerHttpErrorMapper(app: FastifyInstance): void {
       });
     }
 
-    const { code: pgCode, message: pgMessage } = extractPgError(err);
+    const mapped = mapPgAndInfraError(err, requestId);
+    if (mapped) return reply.status(mapped.status).send(mapped.body);
 
-    if (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500) {
-      return reply.status(err.statusCode).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: err.statusCode === 413 ? 'İstek boyutu sınırı aşıldı' : 'Geçersiz HTTP isteği',
-          requestId,
-        },
-      });
-    }
-
-    if (pgCode === '42501') {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Bu işlem için yetkiniz bulunmuyor', requestId } });
-    }
-    if (pgCode === 'P0002') {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'İstenen kayıt bulunamadı', requestId } });
-    }
-    if (pgCode === 'P0001' || pgCode === '23514' || pgCode === '22023' || pgCode === '23000') {
-      const mapped = mapPgConstraintMessage(pgMessage, requestId);
-      return reply.status(mapped.status).send(mapped.body);
-    }
-    if (pgCode === '23505') {
-      return reply.status(409).send({ error: { code: 'CONFLICT', message: 'Bu kayıt zaten mevcut', requestId } });
-    }
-    if (pgCode === '23503') {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'İlişkili kayıt bulunamadı', requestId } });
-    }
-
+    const { code: pgCode } = extractPgError(err);
     request.log.error({ err: { name: err?.name, code: pgCode } }, 'Unhandled error');
     return reply.status(500).send({
       error: { code: 'INTERNAL_ERROR', message: 'Sunucu hatası oluştu, lütfen tekrar deneyin', requestId },

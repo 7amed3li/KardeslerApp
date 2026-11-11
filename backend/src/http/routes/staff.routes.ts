@@ -46,10 +46,12 @@ function registerPrintAndRealtimeRoutes(app: FastifyInstance, printRt: PrintAndR
     const raw = req.headers['last-event-id'];
     const lastId = typeof raw === 'string' ? parseInt(raw, 10) : undefined;
     if (req.headers['x-sse-mode'] === 'snapshot') return reply.status(200).send(await printRt.getEventSnapshot(lastId));
-    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     const unsub = await printRt.subscribeStaffEvents((evt) => {
       if (!reply.raw.writableEnded) reply.raw.write(`id: ${evt.id}\nevent: ${evt.event}\ndata: ${JSON.stringify(evt.data)}\n\n`);
     }, lastId);
+    reply.hijack();
+    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    reply.raw.write(': connected\n\n');
     req.raw.on('close', unsub);
   });
   app.get('/api/v1/print-agent/jobs/poll', async (req, reply) => {

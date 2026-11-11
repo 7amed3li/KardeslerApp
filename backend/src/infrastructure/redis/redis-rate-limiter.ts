@@ -26,17 +26,29 @@ export class RedisRateLimiter implements RateLimiterPort {
   constructor(private readonly redis: Redis) {}
 
   async check(key: string, maxRequests: number, windowMs: number, message?: string): Promise<void> {
+    if (this.redis.status === 'reconnecting' || this.redis.status === 'end' || this.redis.status === 'close') {
+      throw new DomainError('SERVICE_UNAVAILABLE', 503, 'Hız sınırlama servisi geçici olarak kullanılamıyor (fail-closed)');
+    }
     const now = Date.now();
     const member = `${now}:${Math.random().toString(36).slice(2, 10)}`;
-    const allowed = await this.redis.eval(
-      SLIDING_WINDOW_LUA,
-      1,
-      `rl:${key}`,
-      String(now),
-      String(windowMs),
-      String(maxRequests),
-      member,
-    );
+    let allowed: unknown;
+    try {
+      allowed = await this.redis.eval(
+        SLIDING_WINDOW_LUA,
+        1,
+        `rl:${key}`,
+        String(now),
+        String(windowMs),
+        String(maxRequests),
+        member,
+      );
+    } catch {
+      throw new DomainError(
+        'SERVICE_UNAVAILABLE',
+        503,
+        'Hız sınırlama servisi geçici olarak kullanılamıyor (fail-closed)',
+      );
+    }
 
     if (Number(allowed) !== 1) {
       throw new DomainError(
@@ -48,7 +60,20 @@ export class RedisRateLimiter implements RateLimiterPort {
   }
 
   async checkSmsCircuitBreaker(maxGlobalPer5Min = 50): Promise<void> {
-    const tripped = await this.redis.get(this.breakerKey);
+    if (this.redis.status === 'reconnecting' || this.redis.status === 'end' || this.redis.status === 'close') {
+      throw new DomainError('SERVICE_UNAVAILABLE', 503, 'Güvenlik hız sınırı servisi kullanılamıyor, OTP gönderimi durduruldu');
+    }
+    let tripped: string | null;
+    try {
+      tripped = await this.redis.get(this.breakerKey);
+    } catch {
+      throw new DomainError(
+        'SERVICE_UNAVAILABLE',
+        503,
+        'Güvenlik hız sınırı servisi kullanılamıyor, OTP gönderimi durduruldu',
+      );
+    }
+
     if (tripped && Number(tripped) > Date.now()) {
       throw new DomainError(
         'RATE_LIMITED',
@@ -60,7 +85,9 @@ export class RedisRateLimiter implements RateLimiterPort {
     try {
       await this.check('global:sms_pumping', maxGlobalPer5Min, 5 * 60 * 1000);
     } catch (err) {
-      await this.redis.set(this.breakerKey, String(Date.now() + 10 * 60 * 1000), 'PX', 10 * 60 * 1000);
+      if (err instanceof DomainError && err.statusCode === 429) {
+        await this.redis.set(this.breakerKey, String(Date.now() + 10 * 60 * 1000), 'PX', 10 * 60 * 1000).catch(() => {});
+      }
       throw err;
     }
   }

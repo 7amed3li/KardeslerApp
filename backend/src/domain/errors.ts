@@ -15,6 +15,7 @@ export type DomainErrorCode =
   | 'INVALID_STATE_TRANSITION'
   | 'PAYMENT_AMOUNT_MISMATCH'
   | 'TOTP_SETUP_REQUIRED'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 export class DomainError extends Error {

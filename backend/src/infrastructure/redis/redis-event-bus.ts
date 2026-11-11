@@ -1,4 +1,5 @@
 import type { Redis } from 'ioredis';
+import { DomainError } from '../../domain/errors.js';
 import type { EventBusPort, RealtimeEvent } from '../../ports/state.js';
 
 export class RedisEventBus implements EventBusPort {
@@ -8,15 +9,16 @@ export class RedisEventBus implements EventBusPort {
   private readonly maxHistory = 200;
   private readonly listeners = new Set<(evt: RealtimeEvent) => void>();
   private subscribed = false;
+  private listenerAttached = false;
 
   constructor(
     private readonly pubRedis: Redis,
     private readonly subRedis: Redis,
   ) {}
 
-  private async ensureSubscribed(): Promise<void> {
-    if (this.subscribed) return;
-    this.subscribed = true;
+  private attachHooks(): void {
+    if (this.listenerAttached) return;
+    this.listenerAttached = true;
     this.subRedis.on('message', (_chan, msg) => {
       try {
         const evt = JSON.parse(msg) as RealtimeEvent;
@@ -25,7 +27,26 @@ export class RedisEventBus implements EventBusPort {
         // ignore malformed event payload
       }
     });
+    this.subRedis.on('close', () => {
+      this.subscribed = false;
+    });
+    this.subRedis.on('ready', () => {
+      if (this.listeners.size > 0 && !this.subscribed) {
+        void this.subRedis.subscribe(this.channel).then(() => {
+          this.subscribed = true;
+        }).catch(() => {});
+      }
+    });
+  }
+
+  private async ensureSubscribed(): Promise<void> {
+    this.attachHooks();
+    if (this.subRedis.status !== 'ready') {
+      throw new DomainError('SERVICE_UNAVAILABLE', 503, 'Gerçek zamanlı yayın bağlantısı geçici olarak kapalı');
+    }
+    if (this.subscribed) return;
     await this.subRedis.subscribe(this.channel);
+    this.subscribed = true;
   }
 
   async publish(event: string, data: Record<string, unknown>): Promise<RealtimeEvent> {
@@ -68,4 +89,3 @@ export class RedisEventBus implements EventBusPort {
     };
   }
 }
-
