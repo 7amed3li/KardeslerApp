@@ -100,14 +100,12 @@
     "empty": "لا توجد طلبات بعد",
     "status": {
       "awaiting_payment": "بانتظار الدفع",
-      "pending": "بانتظار التأكيد",
-      "confirmed": "تم التأكيد",
-      "preparing": "قيد التحضير",
-      "ready": "جاهز",
+      "new": "بانتظار التأكيد",
+      "accepted": "تم القبول / قيد التحضير",
       "on_the_way": "في الطريق",
       "delivered": "تم التوصيل",
       "cancelled": "ملغي",
-      "payment_failed": "فشل الدفع"
+      "rejected": "مرفوض"
     },
     "cancelOrder": "إلغاء الطلب",
     "callRestaurant": "الاتصال بالمطعم",

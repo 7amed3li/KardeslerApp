@@ -100,14 +100,12 @@
     "empty": "Henüz siparişiniz yok",
     "status": {
       "awaiting_payment": "Ödeme Bekleniyor",
-      "pending": "Onay Bekliyor",
-      "confirmed": "Onaylandı",
-      "preparing": "Hazırlanıyor",
-      "ready": "Hazır",
+      "new": "Onay Bekliyor",
+      "accepted": "Onaylandı / Hazırlanıyor",
       "on_the_way": "Yolda",
       "delivered": "Teslim Edildi",
       "cancelled": "İptal Edildi",
-      "payment_failed": "Ödeme Başarısız"
+      "rejected": "Reddedildi"
     },
     "cancelOrder": "Siparişi İptal Et",
     "callRestaurant": "Restoranı Ara",

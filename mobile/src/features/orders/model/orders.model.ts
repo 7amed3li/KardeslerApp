@@ -1,7 +1,7 @@
 import type { OrderStatus } from '@kardesler/shared';
 
-const TERMINAL_STATUSES = new Set<OrderStatus>(['delivered', 'cancelled', 'payment_failed']);
-const CANCELLABLE_STATUSES = new Set<OrderStatus>(['awaiting_payment', 'pending']);
+const TERMINAL_STATUSES = new Set<OrderStatus>(['delivered', 'cancelled', 'rejected']);
+const CANCELLABLE_STATUSES = new Set<OrderStatus>(['awaiting_payment', 'new']);
 
 export function isTerminalOrderStatus(status: OrderStatus): boolean {
   return TERMINAL_STATUSES.has(status);

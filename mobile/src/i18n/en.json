@@ -100,14 +100,12 @@
     "empty": "No orders yet",
     "status": {
       "awaiting_payment": "Awaiting Payment",
-      "pending": "Pending",
-      "confirmed": "Confirmed",
-      "preparing": "Preparing",
-      "ready": "Ready",
+      "new": "Pending Confirmation",
+      "accepted": "Accepted / Preparing",
       "on_the_way": "On the Way",
       "delivered": "Delivered",
       "cancelled": "Cancelled",
-      "payment_failed": "Payment Failed"
+      "rejected": "Rejected"
     },
     "cancelOrder": "Cancel Order",
     "callRestaurant": "Call Restaurant",

@@ -29,7 +29,7 @@ export async function createOrder(input: {
         ...(input.addressId ? { address_id: input.addressId } : {}),
         ...(input.couponCode ? { coupon_code: input.couponCode } : {}),
         ...(input.customerNote ? { customer_note: input.customerNote } : {}),
-      },
+      } as never,
     }) as Promise<{ data?: CreateOrderResponseDto; error?: unknown; response: Response }>,
   );
 }
@@ -59,7 +59,7 @@ export async function cancelMyOrder(
   return unwrapApiResponse<{ order: OrderSummaryDto; refunded: boolean }>(
     apiClient.POST('/api/v1/orders/{id}/cancel', {
       params: { path: { id } } as never,
-      body: reason ? { reason } : {},
+      body: (reason ? { reason } : {}) as never,
     }) as Promise<{
       data?: { order: OrderSummaryDto; refunded: boolean };
       error?: unknown;
