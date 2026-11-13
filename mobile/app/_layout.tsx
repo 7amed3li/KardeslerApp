@@ -4,7 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { bootstrapSession } from '../src/api/client';
+import { bootstrapSession, sessionTokenStore } from '../src/api/client';
+import { useAuthStore } from '../src/features/auth/model/auth.store';
 import { initSentry } from '../src/lib/sentry';
 import { ThemeProvider } from '../src/ui/themes/ThemeProvider';
 
@@ -21,7 +22,14 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   useEffect(() => {
-    void bootstrapSession();
+    sessionTokenStore.onSessionExpired(() => {
+      useAuthStore.getState().clearAuth();
+    });
+    void bootstrapSession().then((ok) => {
+      if (ok && !useAuthStore.getState().isAuthenticated) {
+        useAuthStore.getState().setAuthenticated(null);
+      }
+    });
   }, []);
 
   return (
@@ -32,6 +40,7 @@ export default function RootLayout() {
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
             </Stack>
           </QueryClientProvider>
         </ThemeProvider>
