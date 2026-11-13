@@ -53,7 +53,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   extra: {
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:4000',
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'https://kardeslerapp.onrender.com',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
     eas: {
       projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '8fe36c38-ddc2-4032-934e-7ff5054d0ce6',

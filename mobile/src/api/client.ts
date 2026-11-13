@@ -21,10 +21,7 @@ export function resolveApiBaseUrl(): string {
       return `http://${host}:4000`;
     }
   }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:4000';
-  }
-  return 'http://127.0.0.1:4000';
+  return 'https://kardeslerapp.onrender.com';
 }
 
 let inMemoryAccessToken: string | null = null;
