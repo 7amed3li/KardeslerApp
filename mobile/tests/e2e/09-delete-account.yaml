@@ -1,0 +1,8 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn: "Hesabı Sil (KVKK)"
+- tapOn: "Sil"
+- assertVisible: "Misafir Kullanıcı"
+

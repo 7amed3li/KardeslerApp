@@ -8,3 +8,4 @@ appId: com.kardeslercihangir.app
 - tapOn: "Sepete Ekle"
 - tapOn: "Sepet"
 - assertVisible: "Toplam"
+

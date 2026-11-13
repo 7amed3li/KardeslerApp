@@ -9,3 +9,4 @@ appId: com.kardeslercihangir.app
 - tapOn: "Online Kart ile Ödeme"
 - tapOn: "Siparişi Onayla"
 - assertVisible: "Sipariş #"
+

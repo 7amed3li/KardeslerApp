@@ -6,3 +6,4 @@ appId: com.kardeslercihangir.app
     index: 0
 - tapOn: "Tekrar Sipariş Ver"
 - assertVisible: "Sepetim"
+

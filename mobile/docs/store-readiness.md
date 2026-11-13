@@ -27,3 +27,4 @@
 - [ ] Physical iOS & Android push notification delivery (foreground, background, terminated tap).
 - [ ] Real iyzico hosted checkout redirect (`kardesler://payment-return`) and server status verification.
 - [ ] Arabic RTL layout inspection on physical device after `I18nManager.forceRTL(true)`.
+

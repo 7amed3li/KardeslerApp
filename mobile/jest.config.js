@@ -14,6 +14,7 @@ module.exports = {
     'src/lib/**/*.{ts,tsx}',
     'src/features/**/model/**/*.{ts,tsx}',
     '!src/api/generated/**',
+    '!src/api/types.ts',
     '!**/*.d.ts',
   ],
   coverageThreshold: {

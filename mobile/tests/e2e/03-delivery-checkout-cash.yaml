@@ -9,3 +9,4 @@ appId: com.kardeslercihangir.app
 - tapOn: "Kapıda Nakit Ödeme"
 - tapOn: "Siparişi Onayla"
 - assertVisible: "Sipariş #"
+

@@ -1,0 +1,10 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- tapOn: "Siparişler"
+- tapOn:
+    text: "Teslim Edildi"
+- tapOn: "5★"
+- tapOn: "Değerlendirmeyi Gönder"
+- assertVisible: "Değerlendirmeniz için teşekkürler!"
+

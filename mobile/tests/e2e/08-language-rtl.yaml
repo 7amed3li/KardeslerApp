@@ -1,0 +1,8 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- tapOn: "AR"
+- assertVisible: "كاردشلر جيهانغير"
+- tapOn: "TR"
+- assertVisible: "Kardeşler Cihangir"
+
