@@ -31,7 +31,12 @@ describe('Step 2: Database Connection Security Posture & RLS Isolation', () => {
   });
 
   it('2. fails fast if API pool connects as postgres superuser or wrong role', async () => {
-    const superSql = postgres('postgresql://postgres@127.0.0.1:5434/kardesler_db', { max: 1 });
+    const superPass = process.env.PGPASSWORD || 'postgres_dev_password';
+    const superPort = process.env.PGPORT || '5434';
+    const superSql = postgres(
+      `postgresql://postgres:${superPass}@127.0.0.1:${superPort}/kardesler_db`,
+      { max: 1 },
+    );
     try {
       await expect(verifyDbSecurityPosture(superSql, readonlyClient)).rejects.toThrow(
         /Security violation/,

@@ -66,6 +66,14 @@ INSERT INTO staff_users (
     NULL,
     false,
     true
+), (
+    'a0000000-0000-0000-0000-000000000002',
+    'staff@kardeslercihangir.com',
+    '$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQxMjM0NTY3OA$9vGZ46lSj8fI3bX9+tLwzK1p6uY7d0eQ4r1a2b3c4d5',
+    'staff',
+    NULL,
+    false,
+    true
 ) ON CONFLICT (email) DO NOTHING;
 
 -- ----------------------------------------------------------------------------

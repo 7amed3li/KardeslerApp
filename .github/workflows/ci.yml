@@ -68,6 +68,7 @@ jobs:
           PGPASSWORD=postgres_dev_password
           psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/008_hardening.sql
           psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/009_order_flow.sql
+          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/010_user_identities.sql
           psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests_phase0.sql
           psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests.sql
 
