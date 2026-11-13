@@ -1,220 +1,164 @@
 import { useQuery } from '@tanstack/react-query';
-import Constants from 'expo-constants';
 import React from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { formatKurus } from '../../src/lib/money/format';
-import { colors } from '../../src/ui/tokens/colors';
-
-function getApiBaseUrl(): string {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    return `http://${host}:4000`;
-  }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:4000';
-  }
-  return 'http://127.0.0.1:4000';
-}
-
-interface MenuItemDto {
-  id: string;
-  name: string;
-  description?: string | null;
-  price_kurus?: number;
-  priceKurus?: number;
-  is_available?: boolean;
-  isAvailable?: boolean;
-  category_id?: string;
-  categoryId?: string;
-}
-
-interface MenuResponse {
-  language: string;
-  categories: { id: string; name: string }[];
-  items: MenuItemDto[];
-}
+import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { resolveApiBaseUrl } from '../../src/api/client';
+import { queryKeys } from '../../src/api/query-keys';
+import type { MenuResponseDto } from '../../src/api/types';
+import { useTranslations } from '../../src/i18n';
+import { BRAND_IMAGES, resolveDishImage } from '../../src/ui/assets/dishImages';
+import { Card, PriceText, Screen, StateView } from '../../src/ui/components';
+import { useTheme } from '../../src/ui/themes/ThemeProvider';
 
 export default function HomeMenuScreen() {
-  const apiBase = getApiBaseUrl();
+  const theme = useTheme();
+  const { language, t } = useTranslations();
+  const apiBase = resolveApiBaseUrl();
 
-  const { data, isLoading, isError, error, refetch } = useQuery<MenuResponse>({
-    queryKey: ['menu', 'tr', apiBase],
+  const { data, isLoading, isError, error, refetch } = useQuery<MenuResponseDto>({
+    queryKey: queryKeys.menu(language),
     queryFn: async () => {
-      const res = await fetch(`${apiBase}/api/v1/menu?lang=tr`);
+      const res = await fetch(`${apiBase}/api/v1/menu?lang=${language}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      return res.json() as Promise<MenuResponse>;
+      return (await res.json()) as MenuResponseDto;
     },
   });
 
   if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.light.primary} />
-        <Text style={styles.muted}>Menü yükleniyor...</Text>
-      </View>
-    );
+    return <StateView kind="loading" />;
   }
 
   if (isError) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorTitle}>Bağlantı Hatası</Text>
-        <Text style={styles.muted}>
-          {error instanceof Error ? error.message : 'Sunucuya ulaşılamadı'} ({apiBase})
-        </Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => void refetch()}>
-          <Text style={styles.retryText}>Tekrar Dene</Text>
-        </TouchableOpacity>
-      </View>
+      <StateView
+        kind="error"
+        message={error instanceof Error ? error.message : t.common.errorTitle}
+        onRetry={() => void refetch()}
+      />
     );
   }
 
   const items = data?.items ?? [];
 
   return (
-    <View style={styles.container}>
-      <View style={styles.banner}>
-        <Text style={styles.bannerTitle}>Kardeşler Cihangir</Text>
-        <Text style={styles.bannerSub}>
-          Canlı API bağlantısı: {apiBase} ({items.length} ürün)
-        </Text>
+    <Screen>
+      <View
+        style={[
+          styles.hero,
+          { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
+        ]}
+      >
+        <Image source={BRAND_IMAGES.logo} style={styles.logo} resizeMode="contain" />
+        <View style={styles.heroText}>
+          <Text style={[styles.heroTitle, { color: theme.colors.text }]}>{t.appName}</Text>
+          <Text style={[styles.heroSub, { color: theme.colors.textSecondary }]}>
+            Cihangir, İstanbul • 1998 • {items.length} ürün
+          </Text>
+        </View>
       </View>
 
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.muted}>Menüde ürün bulunamadı.</Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const price = item.price_kurus ?? item.priceKurus ?? 0;
-          const available = item.is_available ?? item.isAvailable ?? true;
-          return (
-            <View style={styles.card}>
-              <View style={styles.cardRow}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemPrice}>{formatKurus(price)}</Text>
+        ListEmptyComponent={<StateView kind="empty" title={t.menu.emptySearch} />}
+        renderItem={({ item }) => (
+          <Card style={styles.card}>
+            <View style={styles.row}>
+              <Image
+                source={resolveDishImage(item.name, item.imageUrl)}
+                style={styles.dishImg}
+                resizeMode="cover"
+              />
+              <View style={styles.info}>
+                <Text style={[styles.name, { color: theme.colors.text }]}>{item.name}</Text>
+                {item.description ? (
+                  <Text
+                    style={[styles.desc, { color: theme.colors.textSecondary }]}
+                    numberOfLines={2}
+                  >
+                    {item.description}
+                  </Text>
+                ) : null}
+                <View style={styles.priceRow}>
+                  <PriceText kurus={item.priceKurus} />
+                  {!item.isAvailable ? (
+                    <Text style={[styles.soldOut, { color: theme.colors.error }]}>
+                      {t.common.soldOut}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
-              {item.description ? (
-                <Text style={styles.itemDesc} numberOfLines={2}>
-                  {item.description}
-                </Text>
-              ) : null}
-              {!available ? <Text style={styles.soldOut}>Tükendi</Text> : null}
             </View>
-          );
-        }}
+          </Card>
+        )}
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.light.background,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.light.background,
+  hero: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
     gap: 12,
   },
-  banner: {
-    backgroundColor: colors.light.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light.border,
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
-  bannerTitle: {
-    fontSize: 20,
+  heroText: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.light.text,
   },
-  bannerSub: {
+  heroSub: {
     fontSize: 12,
-    color: colors.light.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
   list: {
     padding: 16,
-    gap: 12,
+    gap: 10,
   },
   card: {
-    backgroundColor: colors.light.surface,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.light.border,
+    padding: 10,
   },
-  cardRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     gap: 12,
+    alignItems: 'center',
   },
-  itemName: {
+  dishImg: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+  },
+  info: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.light.text,
+    gap: 4,
   },
-  itemPrice: {
+  name: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.light.primary,
   },
-  itemDesc: {
-    fontSize: 13,
-    color: colors.light.textSecondary,
-    marginTop: 6,
-  },
-  soldOut: {
-    marginTop: 6,
+  desc: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.light.error,
   },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.light.error,
-  },
-  muted: {
-    fontSize: 14,
-    color: colors.light.textSecondary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    backgroundColor: colors.light.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 4,
   },
-  retryText: {
-    color: colors.light.primaryText,
+  soldOut: {
+    fontSize: 12,
     fontWeight: '600',
   },
 });
-

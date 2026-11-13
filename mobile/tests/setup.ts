@@ -78,3 +78,4 @@ jest.mock('expo-constants', () => ({
     },
   },
 }));
+
