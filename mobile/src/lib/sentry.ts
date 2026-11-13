@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const SCRUB_KEYS = ['token', 'authorization', 'phone', 'email', 'password', 'code', 'address'];
 
@@ -36,6 +37,7 @@ export function scrubSentryEvent<T extends { request?: { headers?: Record<string
 }
 
 export function initSentry(): void {
+  if (Platform.OS === 'web') return;
   const dsn = (Constants.expoConfig?.extra as { sentryDsn?: string } | undefined)?.sentryDsn;
   if (!dsn) return;
 

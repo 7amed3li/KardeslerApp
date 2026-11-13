@@ -25,7 +25,7 @@ export async function fetchMyReferrals(): Promise<{
 }
 
 export async function recordConsent(input: {
-  type: string;
+  type: 'terms' | 'privacy' | 'marketing_sms' | 'marketing_push' | 'marketing_email';
   granted: boolean;
   source: string;
   version: string;

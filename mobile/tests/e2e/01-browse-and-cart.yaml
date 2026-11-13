@@ -1,0 +1,10 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- assertVisible: "Kardeşler Cihangir"
+- tapOn: "Zırh Kıyma Adana Kebap"
+- assertVisible: "Porsiyon Seçimi"
+- tapOn: "1 Porsiyon"
+- tapOn: "Sepete Ekle"
+- tapOn: "Sepet"
+- assertVisible: "Toplam"

@@ -7,13 +7,15 @@ import { parseSafeDeepLink, type AllowedDeepLink } from '../../lib/deep-links';
 import { logger } from '../../lib/logger';
 import { secureStorage } from '../../lib/secure-storage';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 export async function ensureAndroidNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
@@ -79,3 +81,4 @@ export function extractNotificationDeepLink(
   }
   return null;
 }
+

@@ -188,3 +188,4 @@ const styles = StyleSheet.create({
   starBtn: { flex: 1, minHeight: 38, paddingHorizontal: 6 },
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, height: 42, fontSize: 14 },
 });
+

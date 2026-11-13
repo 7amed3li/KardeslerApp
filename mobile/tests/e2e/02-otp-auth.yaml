@@ -1,0 +1,16 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn: "Giriş Yap"
+- tapOn:
+    id: "phone-input"
+- inputText: "5000000000"
+- tapOn:
+    id: "send-otp-btn"
+- tapOn:
+    id: "otp-box-0"
+- inputText: "145300"
+- tapOn:
+    id: "verify-otp-btn"
+- assertVisible: "Sadakat Puanı"

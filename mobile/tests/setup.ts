@@ -66,6 +66,10 @@ jest.mock('expo-location', () => ({
   })),
 }));
 
+jest.mock('expo-device', () => ({
+  isDevice: true,
+}));
+
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {

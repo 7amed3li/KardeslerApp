@@ -56,3 +56,4 @@ export async function deleteAddress(id: string): Promise<{ deleted: boolean }> {
     }) as Promise<{ data?: { deleted: boolean }; error?: unknown; response: Response }>,
   );
 }
+

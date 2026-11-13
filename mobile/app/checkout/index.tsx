@@ -269,3 +269,4 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, height: 44, fontSize: 14 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
+

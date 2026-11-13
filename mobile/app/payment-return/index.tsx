@@ -36,3 +36,4 @@ export default function PaymentReturnScreen() {
 
   return <StateView kind="loading" title={t.checkout.paymentProcessing} />;
 }
+

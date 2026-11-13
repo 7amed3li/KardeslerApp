@@ -1,0 +1,11 @@
+appId: com.kardeslercihangir.app
+---
+- launchApp
+- tapOn: "Zırh Kıyma Adana Kebap"
+- tapOn: "1 Porsiyon"
+- tapOn: "Sepete Ekle"
+- tapOn: "Sepet"
+- tapOn: "Siparişi Tamamla"
+- tapOn: "Kapıda Nakit Ödeme"
+- tapOn: "Siparişi Onayla"
+- assertVisible: "Sipariş #"

@@ -298,3 +298,4 @@ const styles = StyleSheet.create({
   errText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
   actions: { gap: 8, marginTop: 4 },
 });
+
