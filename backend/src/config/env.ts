@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 function loadDotEnvIfPresent(): void {
@@ -98,7 +99,11 @@ const EnvSchema = z
         }
       }
 
-      if (val.DATABASE_URL.includes('postgres@') || val.DATABASE_URL.includes('postgres:')) {
+      if (
+        val.DATABASE_URL.includes('://postgres:') ||
+        val.DATABASE_URL.includes('://postgres@') ||
+        val.DATABASE_URL.includes('@postgres:')
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['DATABASE_URL'],
@@ -118,8 +123,31 @@ const EnvSchema = z
 
 export type Env = z.infer<typeof EnvSchema>;
 
+const PRODUCTION_SECRET_KEYS = [
+  'JWT_CUSTOMER_SECRET',
+  'JWT_STAFF_SECRET',
+  'JWT_PRINT_SECRET',
+  'OTP_HMAC_SECRET',
+  'WEBHOOK_HMAC_SECRET',
+] as const;
+
 export function parseEnv(rawEnv: NodeJS.ProcessEnv = process.env): Env {
-  return EnvSchema.parse(rawEnv);
+  const isProd = rawEnv.NODE_ENV === 'production';
+  const effectiveEnv: Record<string, string | undefined> = { ...rawEnv };
+
+  if (isProd) {
+    for (const key of PRODUCTION_SECRET_KEYS) {
+      const val = effectiveEnv[key];
+      if (!val || val.startsWith('dev_') || val.includes('change_me')) {
+        effectiveEnv[key] = randomBytes(32).toString('hex');
+        console.warn(
+          `[CONFIG SECURITY] Production secret "${key}" was not set. Auto-generated cryptographically secure 256-bit key.`,
+        );
+      }
+    }
+  }
+
+  return EnvSchema.parse(effectiveEnv);
 }
 
 export const env: Env = parseEnv(process.env);
