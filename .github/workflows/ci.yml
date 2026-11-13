@@ -10,6 +10,11 @@ jobs:
   verify:
     name: Lint, Typecheck, Test, and Audit
     runs-on: ubuntu-latest
+    env:
+      PGPORT: 5434
+      DATABASE_URL: postgresql://app_api:api_dev_secret_change_me@127.0.0.1:5434/kardesler_db
+      DATABASE_READONLY_URL: postgresql://app_readonly:readonly_dev_secret_change_me@127.0.0.1:5434/kardesler_db
+      REDIS_URL: redis://127.0.0.1:6379
 
     services:
       postgres:
@@ -19,6 +24,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres_dev_password
         ports:
+          - 5434:5432
           - 5432:5432
         options: >-
           --health-cmd pg_isready
