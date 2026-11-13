@@ -11,6 +11,9 @@
 
 BEGIN;
 
+SELECT set_config('app.allow_seed', 'true', true);
+SELECT set_config('app.current_role', 'system', true);
+
 DO $$
 BEGIN
     IF current_setting('app.allow_seed', true) IS DISTINCT FROM 'true' THEN
