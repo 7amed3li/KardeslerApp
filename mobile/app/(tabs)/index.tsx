@@ -343,7 +343,7 @@ export default function HomeTabScreen() {
               {t.home.campaignLabel}
             </Text>
             <Pressable
-              onPress={() => router.push('/(tabs)/menu')}
+              onPress={() => router.push('/offers')}
               style={styles.seeAllRow}
             >
               <Text style={[theme.typography.label, { color: theme.colors.primary }]}>
@@ -354,7 +354,7 @@ export default function HomeTabScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push('/(tabs)/menu')}
+            onPress={() => router.push('/offers')}
             accessibilityRole="button"
             style={[
               styles.heroCard,

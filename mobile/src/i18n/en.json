@@ -214,6 +214,8 @@
     "guestDesc": "Sign in to place orders, earn loyalty points, and save addresses.",
     "sectionAccount": "Account",
     "sectionAddresses": "Addresses",
+    "sectionOffers": "Offers & Deals",
+    "offers": "Offers & Deals",
     "sectionLoyalty": "Loyalty & Referrals",
     "sectionPreferences": "Preferences",
     "sectionSupport": "Support & Legal",
@@ -263,5 +265,18 @@
     "selectAddress": "Use",
     "deleteAddress": "Delete",
     "defaultLabel": "Home"
+  },
+  "offers": {
+    "title": "Offers & Deals",
+    "subtitle": "Exclusive discounts and special coupons from Kardeşler Cihangir",
+    "copyCode": "Copy Code",
+    "copied": "Copied!",
+    "applyCoupon": "Apply Coupon",
+    "applied": "Coupon Applied!",
+    "startOrder": "Order Now",
+    "minBasket": "Min. Basket",
+    "validUntil": "Valid Until",
+    "activeOffers": "Active Deals",
+    "emptyOffers": "No active offers right now."
   }
 }

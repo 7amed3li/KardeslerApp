@@ -4,6 +4,7 @@ export type AllowedDeepLink =
   | { route: '/(tabs)' }
   | { route: '/(tabs)/menu' }
   | { route: '/cart' }
+  | { route: '/offers' }
   | { route: '/(tabs)/orders' }
   | { route: '/(tabs)/profile' }
   | { route: '/orders/[id]'; params: { id: string } }
@@ -41,6 +42,7 @@ export function parseSafeDeepLink(rawUrl: string | null | undefined): AllowedDee
   if (segments.length === 1) {
     if (segments[0] === 'menu') return { route: '/(tabs)/menu' };
     if (segments[0] === 'cart') return { route: '/cart' };
+    if (segments[0] === 'offers') return { route: '/offers' };
     if (segments[0] === 'orders') return { route: '/(tabs)/orders' };
     if (segments[0] === 'profile') return { route: '/(tabs)/profile' };
     if (segments[0] === 'payment-return') {

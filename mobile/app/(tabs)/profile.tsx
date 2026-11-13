@@ -12,6 +12,7 @@ import {
   MapPin,
   Share2,
   Shield,
+  Tag,
   Trash2,
   User,
 } from 'lucide-react-native';
@@ -342,6 +343,24 @@ export default function ProfileTabScreen() {
               </Text>
             ) : null}
           </Card>
+        </View>
+
+        {/* Section: Offers & Campaigns */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.offers?.title ?? (language === 'ar' ? 'العروض والحملات' : language === 'tr' ? 'Kampanyalar & Fırsatlar' : 'Offers & Deals')}
+          </Text>
+          <Pressable onPress={() => router.push('/offers')} accessibilityRole="button">
+            <Card variant="elevated" style={styles.rowBetween}>
+              <View style={styles.inlineRow}>
+                <Tag size={18} color={theme.colors.accent} />
+                <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                  {t.offers?.heroTitle ?? (language === 'ar' ? 'أقوى العروض والتخفيضات' : language === 'tr' ? 'Tüm Kampanyalar ve Fırsatlar' : 'All Offers & Deals')}
+                </Text>
+              </View>
+              <ChevronIcon size={18} color={theme.colors.textMuted} />
+            </Card>
+          </Pressable>
         </View>
 
         {/* Section 2: Addresses */}

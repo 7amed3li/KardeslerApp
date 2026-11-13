@@ -16,6 +16,7 @@ import { fetchPublicSettings } from '../src/features/menu/api/menu.api';
 import { extractNotificationDeepLink } from '../src/features/notifications/notifications.service';
 import { useTranslations } from '../src/i18n';
 import { parseSafeDeepLink, type AllowedDeepLink } from '../src/lib/deep-links';
+import { requestStartupPermissions } from '../src/lib/permissions/startup-permissions';
 import { initSentry } from '../src/lib/sentry';
 import { isVersionOutdated } from '../src/lib/version';
 import { OfflineBanner, Screen, StateView } from '../src/ui/components';
@@ -126,6 +127,8 @@ function AppShell() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="auth/callback" />
+        <Stack.Screen name="offers/index" />
         <Stack.Screen name="menu/[id]" />
         <Stack.Screen name="cart" />
         <Stack.Screen name="checkout/index" />
@@ -164,6 +167,7 @@ class RootErrorBoundary extends Component<
 
 export default function RootLayout() {
   useEffect(() => {
+    void requestStartupPermissions();
     sessionTokenStore.onSessionExpired(() => {
       useAuthStore.getState().clearAuth();
     });

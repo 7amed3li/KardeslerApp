@@ -214,6 +214,8 @@
     "guestDesc": "سجّل الدخول لإتمام الطلبات وكسب النقاط وحفظ العناوين.",
     "sectionAccount": "الحساب",
     "sectionAddresses": "العناوين",
+    "sectionOffers": "العروض والقسائم",
+    "offers": "العروض والتخفيضات",
     "sectionLoyalty": "الولاء والدعوات",
     "sectionPreferences": "التفضيلات",
     "sectionSupport": "الدعم والشروط",
@@ -263,5 +265,18 @@
     "selectAddress": "اختيار",
     "deleteAddress": "حذف",
     "defaultLabel": "المنزل"
+  },
+  "offers": {
+    "title": "العروض والتخفيضات",
+    "subtitle": "عروض وخصومات حصرية وقسائم توفير من كاردشلار جيهانجير",
+    "copyCode": "نسخ الكود",
+    "copied": "تم النسخ!",
+    "applyCoupon": "تطبيق الكوبون",
+    "applied": "تم تطبيق الكوبون!",
+    "startOrder": "ابدأ الطلب الآن",
+    "minBasket": "الحد الأدنى للطلب",
+    "validUntil": "صالح حتى",
+    "activeOffers": "العروض النشطة",
+    "emptyOffers": "لا توجد عروض حالياً."
   }
 }

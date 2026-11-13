@@ -214,6 +214,8 @@
     "guestDesc": "Sipariş vermek, puan kazanmak ve adreslerinizi kaydetmek için giriş yapın.",
     "sectionAccount": "Hesap",
     "sectionAddresses": "Adresler",
+    "sectionOffers": "Kampanyalar & Fırsatlar",
+    "offers": "Kampanyalar & Fırsatlar",
     "sectionLoyalty": "Sadakat ve Davet",
     "sectionPreferences": "Tercihler",
     "sectionSupport": "Destek ve Yasal",
@@ -263,5 +265,18 @@
     "selectAddress": "Seç",
     "deleteAddress": "Sil",
     "defaultLabel": "Ev"
+  },
+  "offers": {
+    "title": "Kampanyalar & Fırsatlar",
+    "subtitle": "Kardeşler Cihangir'e özel indirimler ve fırsat kuponları",
+    "copyCode": "Kodu Kopyala",
+    "copied": "Kopyalandı!",
+    "applyCoupon": "Kuponu Uygula",
+    "applied": "Kupon Uygulandı!",
+    "startOrder": "Siparişe Başla",
+    "minBasket": "Min. Sipariş",
+    "validUntil": "Geçerlilik",
+    "activeOffers": "Aktif Kampanyalar",
+    "emptyOffers": "Şu anda aktif bir kampanya bulunmuyor."
   }
 }
