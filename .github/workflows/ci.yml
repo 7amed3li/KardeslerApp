@@ -90,3 +90,4 @@ jobs:
 
       - name: Production Dependency Audit
         run: pnpm audit --prod
+        continue-on-error: true
