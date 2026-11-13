@@ -41,6 +41,9 @@ BEGIN
     END IF;
 
     GRANT app_readonly, app_api, app_definer TO app_migrator;
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres') THEN
+        GRANT app_migrator, app_definer TO postgres;
+    END IF;
 END $$;
 
 -- 3. CONNECTION & TIMEOUT HARDENING

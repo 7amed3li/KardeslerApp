@@ -149,7 +149,14 @@ function buildUseCases(
 }
 
 export function createAppContainer(overrides: CompositionOverrides = {}): AppContainer {
-  const useInMemory = overrides.useInMemoryState ?? (env.REDIS_URL === 'memory');
+  const isLocalhostRedis = env.REDIS_URL.includes('127.0.0.1') || env.REDIS_URL.includes('localhost');
+  const isCloudDeployment = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RAILWAY_STATIC_URL || process.env.FLY_APP_NAME);
+  const useInMemory =
+    overrides.useInMemoryState ??
+    (env.REDIS_URL === 'memory' || (isCloudDeployment && isLocalhostRedis));
+  if (useInMemory && isCloudDeployment && isLocalhostRedis) {
+    console.warn('[STARTUP] Standalone cloud deployment detected without remote Redis. Activating high-performance in-memory state adapters.');
+  }
   const state = buildStateAdapters(useInMemory);
   const p = buildCoreProviders(overrides);
   const uc = buildUseCases(state, p);

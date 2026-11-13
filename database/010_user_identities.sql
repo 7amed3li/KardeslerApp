@@ -1,5 +1,4 @@
 -- Migration: 010_user_identities.sql (Google OIDC Identity Links & KVKK Erasure)
-SET ROLE app_migrator;
 
 CREATE TABLE IF NOT EXISTS public.user_identities (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -9,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.user_identities (
     email_at_link citext,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.user_identities OWNER TO app_migrator;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_identities_provider_subject
     ON public.user_identities (provider, provider_subject);
@@ -44,8 +45,6 @@ CREATE POLICY pol_admin_migrator_user_identities ON public.user_identities
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_identities TO app_api;
 GRANT SELECT ON public.user_identities TO app_readonly;
-
-RESET ROLE;
 
 -- Update anonymize_user to delete user_identities (owned by app_definer)
 CREATE OR REPLACE FUNCTION public.anonymize_user(p_user_id uuid)
@@ -124,3 +123,4 @@ END;
 $function$;
 
 ALTER FUNCTION public.anonymize_user(uuid) OWNER TO app_definer;
+

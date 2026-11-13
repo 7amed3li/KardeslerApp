@@ -59,18 +59,19 @@ jobs:
       - name: Verify Database Migrations (001+008+009 superuser, 002-007 app_migrator) & SQL Security Tests
         env:
           PGPASSWORD: postgres_dev_password
+          PGPORT: 5434
         run: |
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/001_extensions_and_roles.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/001_extensions_and_roles.sql
           PGPASSWORD=migrator_dev_secret_change_me
           for f in 002_core.sql 003_menu.sql 004_orders.sql 005_promotions.sql 006_security_rls.sql 007_seed.sql; do
-            psql -h localhost -U app_migrator -d kardesler_db -v ON_ERROR_STOP=1 -f database/$f
+            psql -h localhost -p 5434 -U app_migrator -d kardesler_db -v ON_ERROR_STOP=1 -f database/$f
           done
           PGPASSWORD=postgres_dev_password
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/008_hardening.sql
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/009_order_flow.sql
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/010_user_identities.sql
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests_phase0.sql
-          psql -h localhost -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/008_hardening.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/009_order_flow.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/010_user_identities.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests_phase0.sql
+          psql -h localhost -p 5434 -U postgres -d kardesler_db -v ON_ERROR_STOP=1 -f database/tests.sql
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
