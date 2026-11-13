@@ -203,8 +203,8 @@ BEGIN
     PERFORM set_config('app.current_user_id', v_alice_id::text, true);
 
     -- 3a. Create online card order with coupon HOSGELDIN (20% off, min order 30000)
-    -- Items: 1x Zırh Kıyma Adana Kebap (34000) + 1x Köy Ayranı (4000) = 38000 kuruş subtotal
-    -- 20% discount = 7600 kuruş -> total = 30400 kuruş (above Cihangir Merkez zone min 25000 kuruş)
+    -- Items: 1x Zırh Kıyma Adana Kebap (72500) + 1x Köy Ayranı (8500) = 81000 kuruş subtotal
+    -- 20% discount (capped at 10000) = 10000 kuruş -> total = 71000 kuruş (above Cihangir Merkez zone min 25000 kuruş)
     v_order_id := public.create_order(
         p_order_type := 'delivery',
         p_payment_method := 'card_online',
@@ -259,7 +259,7 @@ BEGIN
     IF v_order.status <> 'awaiting_payment' THEN
         RAISE EXCEPTION 'FAIL 3a: Card order status should be awaiting_payment, got %', v_order.status;
     END IF;
-    IF v_order.subtotal_kurus <> 38000 OR v_order.discount_kurus <> 7600 OR v_order.total_kurus <> 30400 THEN
+    IF v_order.subtotal_kurus <> 81000 OR v_order.discount_kurus <> 10000 OR v_order.total_kurus <> 71000 THEN
         RAISE EXCEPTION 'FAIL 3a: Unexpected order math: subtotal=%, discount=%, total=%',
             v_order.subtotal_kurus, v_order.discount_kurus, v_order.total_kurus;
     END IF;
