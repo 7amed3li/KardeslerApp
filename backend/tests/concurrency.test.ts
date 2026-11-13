@@ -35,6 +35,11 @@ describe('Step 5 Concurrency Tests (Idempotency, Coupon Race & Accept/Cancel Rac
 
     await withTx({ role: 'system' }, async (tx) => {
       await tx.execute(sql`
+        UPDATE public.restaurant_settings
+        SET is_accepting_orders = true, cod_max_open_orders = 5
+        WHERE id = 1
+      `);
+      await tx.execute(sql`
         INSERT INTO public.coupons (code, type, value, min_order_kurus, starts_at, ends_at, max_total_uses, max_uses_per_user, first_order_only, applies_to, is_active)
         VALUES (${limitedCouponCode}, 'fixed_amount', 5000, 10000, clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 day', 1, 1, false, 'all', true)
       `);
