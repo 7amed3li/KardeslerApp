@@ -2,7 +2,9 @@
   "expo": {
     "name": "Kardeşler Cihangir",
     "slug": "kardesler-cihangir",
+    "scheme": "kardesler",
     "version": "1.0.0",
+    "plugins": ["expo-router"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

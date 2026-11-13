@@ -85,6 +85,15 @@ async function main(): Promise<void> {
   const spec = (app as unknown as { swagger(): OpenApiSpec }).swagger();
   await app.close();
 
+  const jsonIdx = process.argv.indexOf('--json');
+  if (jsonIdx !== -1 && process.argv[jsonIdx + 1]) {
+    const jsonOutPath = path.resolve(process.cwd(), process.argv[jsonIdx + 1]);
+    fs.mkdirSync(path.dirname(jsonOutPath), { recursive: true });
+    fs.writeFileSync(jsonOutPath, JSON.stringify(spec, null, 2) + '\n', 'utf8');
+    console.log(`Wrote OpenAPI JSON spec to ${jsonOutPath}`);
+    return;
+  }
+
   const md = buildMarkdownFromSpec(spec);
   const outPath = path.resolve(process.cwd(), '../docs/api.md');
   fs.writeFileSync(outPath, md, 'utf8');

@@ -24,6 +24,7 @@ import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerUsersRoutes } from './routes/users.routes.js';
 import { registerMenuRoutes } from './routes/menu.routes.js';
 import { registerOrderRoutes } from './routes/orders.routes.js';
+import { registerPaymentRoutes } from './routes/payments.routes.js';
 import { registerStaffAndPrintRoutes } from './routes/staff.routes.js';
 import { registerLoyaltyRoutes } from './routes/loyalty.routes.js';
 import { registerAdminRoutes } from './routes/admin.routes.js';
@@ -68,6 +69,15 @@ function createFastifyBase(deps: HttpServerDeps): FastifyInstance {
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body: Buffer, done) => {
+    (req as any).rawBody = body.toString('utf8');
+    try {
+      const json = JSON.parse(body.toString('utf8'));
+      done(null, json);
+    } catch (err: any) {
+      done(err, undefined);
+    }
+  });
   if (deps.onRoute) {
     app.addHook('onRoute', (route) => {
       const methods = Array.isArray(route.method) ? route.method : [route.method];
@@ -97,14 +107,17 @@ function createFastifyBase(deps: HttpServerDeps): FastifyInstance {
 
 export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
   const app = createFastifyBase(deps);
-  registerHealthRoutes(app, deps.dbHealth, deps.nodeEnv);
-  registerAuthRoutes(app, deps.auth, deps.authHooks);
-  registerUsersRoutes(app, deps.users, deps.authHooks);
-  registerMenuRoutes(app, deps.menu, deps.authHooks);
-  registerOrderRoutes(app, deps.orders, deps.payments, deps.authHooks);
-  registerStaffAndPrintRoutes(app, deps.orders, deps.printRt, deps.admin, deps.authHooks);
-  registerLoyaltyRoutes(app, deps.loyalty, deps.authHooks);
-  registerAdminRoutes(app, deps.admin, deps.authHooks);
+  app.after(() => {
+    registerHealthRoutes(app, deps.dbHealth, deps.nodeEnv);
+    registerAuthRoutes(app, deps.auth, deps.authHooks);
+    registerUsersRoutes(app, deps.users, deps.authHooks);
+    registerMenuRoutes(app, deps.menu, deps.authHooks);
+    registerOrderRoutes(app, deps.orders, deps.authHooks);
+    registerPaymentRoutes(app, deps.payments, deps.authHooks);
+    registerStaffAndPrintRoutes(app, deps.orders, deps.printRt, deps.admin, deps.authHooks);
+    registerLoyaltyRoutes(app, deps.loyalty, deps.authHooks);
+    registerAdminRoutes(app, deps.admin, deps.authHooks);
+  });
   return app;
 }
 
