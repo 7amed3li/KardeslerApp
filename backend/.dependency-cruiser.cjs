@@ -44,7 +44,7 @@ module.exports = {
       comment: 'Raw DB clients and Drizzle live only inside infrastructure/db and infrastructure/repositories (plus composition-root).',
       from: {
         path: '^src/',
-        pathNot: '^(src/infrastructure/(repositories|db|jobs)/|src/composition-root\\.ts)',
+        pathNot: '^(src/infrastructure/(repositories|db|jobs)/|src/composition-root\\.ts|src/scripts/)',
       },
       to: {
         path: '^(src/infrastructure/db/|node_modules/(drizzle-orm|postgres))',

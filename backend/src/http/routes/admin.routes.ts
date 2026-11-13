@@ -43,7 +43,7 @@ function registerReportingAndCouponRoutes(app: FastifyInstance, admin: AdminUseC
   });
 }
 
-function registerFleetAndGovernanceRoutes(app: FastifyInstance, admin: AdminUseCases, hooks: HttpAuthHooks): void {
+function registerFleetRoutes(app: FastifyInstance, admin: AdminUseCases, hooks: HttpAuthHooks): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   app.get('/api/v1/admin/zones', async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);
@@ -73,6 +73,10 @@ function registerFleetAndGovernanceRoutes(app: FastifyInstance, admin: AdminUseC
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(200).send(await admin.updateDriver(owner.sub, req.params.id, req.body));
   });
+}
+
+function registerGovernanceRoutes(app: FastifyInstance, admin: AdminUseCases, hooks: HttpAuthHooks): void {
+  const r = app.withTypeProvider<ZodTypeProvider>();
   app.get('/api/v1/admin/staff', async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(200).send(await admin.listStaff(owner.sub));
@@ -113,5 +117,6 @@ function registerFleetAndGovernanceRoutes(app: FastifyInstance, admin: AdminUseC
 
 export function registerAdminRoutes(app: FastifyInstance, admin: AdminUseCases, hooks: HttpAuthHooks): void {
   registerReportingAndCouponRoutes(app, admin, hooks);
-  registerFleetAndGovernanceRoutes(app, admin, hooks);
+  registerFleetRoutes(app, admin, hooks);
+  registerGovernanceRoutes(app, admin, hooks);
 }
