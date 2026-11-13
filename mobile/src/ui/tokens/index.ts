@@ -1,4 +1,3 @@
-export { colors } from './colors';
-export { radii, spacing } from './spacing';
-export { typography } from './typography';
-
+export * from './colors';
+export * from './spacing';
+export * from './typography';

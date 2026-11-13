@@ -53,10 +53,14 @@ export function filterMenuItems(params: {
   searchQuery: string;
   favoritesOnly: boolean;
   favoriteIds: string[];
+  availableOnly?: boolean;
 }): MenuItemDto[] {
   const q = params.searchQuery.trim().toLocaleLowerCase('tr-TR');
   const favSet = new Set(params.favoriteIds);
   return params.items.filter((item) => {
+    if (params.availableOnly && !item.isAvailable) {
+      return false;
+    }
     if (params.categoryId && item.categoryId !== params.categoryId) {
       return false;
     }

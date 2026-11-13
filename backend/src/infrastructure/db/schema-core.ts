@@ -10,6 +10,7 @@ import {
   time,
   inet,
   customType,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const citext = customType<{ data: string }>({
@@ -76,6 +77,24 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    provider: text('provider').notNull(),
+    providerSubject: text('provider_subject').notNull(),
+    emailAtLink: citext('email_at_link'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_user_identities_provider_subject').on(t.provider, t.providerSubject),
+    uniqueIndex('uq_user_identities_user_provider').on(t.userId, t.provider),
+  ],
+);
 
 export const otpCodes = pgTable('otp_codes', {
   id: uuid('id').defaultRandom().primaryKey(),

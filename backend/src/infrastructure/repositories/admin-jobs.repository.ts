@@ -48,6 +48,21 @@ export class PostgresAdminRepository implements AdminRepository {
     });
   }
 
+  async updateDriver(staffId: string, id: string, patch: { name?: string; phone?: string; isActive?: boolean }) {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const [row] = await tx
+        .update(schema.drivers)
+        .set({
+          ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+          ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        })
+        .where(eq(schema.drivers.id, id))
+        .returning();
+      return row ?? null;
+    });
+  }
+
   async listStaff(staffId: string) {
     return withTx({ role: 'owner', staffId }, async (tx) =>
       tx.select({
@@ -55,6 +70,62 @@ export class PostgresAdminRepository implements AdminRepository {
         totpEnabled: schema.staffUsers.totpEnabled, isActive: schema.staffUsers.isActive, lastLoginAt: schema.staffUsers.lastLoginAt,
       }).from(schema.staffUsers),
     );
+  }
+
+  async createStaff(staffId: string, input: { email: string; role: 'staff' | 'owner'; passwordHash: string }) {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const [row] = await tx
+        .insert(schema.staffUsers)
+        .values({
+          email: input.email.toLowerCase(),
+          role: input.role,
+          passwordHash: input.passwordHash,
+          totpEnabled: false,
+          isActive: true,
+        })
+        .returning({
+          id: schema.staffUsers.id,
+          email: schema.staffUsers.email,
+          role: schema.staffUsers.role,
+          totpEnabled: schema.staffUsers.totpEnabled,
+          isActive: schema.staffUsers.isActive,
+        });
+      return row;
+    });
+  }
+
+  async updateStaff(staffId: string, id: string, patch: { role?: 'staff' | 'owner'; isActive?: boolean }) {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const [row] = await tx
+        .update(schema.staffUsers)
+        .set({
+          ...(patch.role !== undefined ? { role: patch.role } : {}),
+          ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        })
+        .where(eq(schema.staffUsers.id, id))
+        .returning({
+          id: schema.staffUsers.id,
+          email: schema.staffUsers.email,
+          role: schema.staffUsers.role,
+          totpEnabled: schema.staffUsers.totpEnabled,
+          isActive: schema.staffUsers.isActive,
+        });
+      return row ?? null;
+    });
+  }
+
+  async resetStaff2FA(staffId: string, id: string) {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const rows = await tx
+        .update(schema.staffUsers)
+        .set({
+          totpEnabled: false,
+          totpSecretEncrypted: null,
+        })
+        .where(eq(schema.staffUsers.id, id))
+        .returning({ id: schema.staffUsers.id });
+      return rows.length > 0;
+    });
   }
 
   async listFraudFlags(staffId: string) {

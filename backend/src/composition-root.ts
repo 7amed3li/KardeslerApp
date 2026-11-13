@@ -16,6 +16,7 @@ import { NodeCryptoService } from './infrastructure/security/crypto.adapter.js';
 import { FakePaymentProvider } from './infrastructure/providers/payment.providers.js';
 import { ConsoleSmsProvider } from './infrastructure/providers/sms.providers.js';
 import { FakePushProvider } from './infrastructure/providers/push.providers.js';
+import { HttpGoogleOidcProvider } from './infrastructure/providers/google-oidc.provider.js';
 import { CryptoIdGenerator, SystemClock } from './infrastructure/providers/system-clock.js';
 import { createRedisConnection } from './infrastructure/redis/redis-client.js';
 import { RedisRateLimiter } from './infrastructure/redis/redis-rate-limiter.js';
@@ -34,12 +35,13 @@ import { AdminUseCases } from './application/admin/admin.use-cases.js';
 import { BackgroundJobsUseCases } from './application/jobs/jobs.use-cases.js';
 import { HttpAuthHooks } from './http/auth-hooks.js';
 import { createHttpServer } from './http/server.js';
-import type { PaymentProvider, SmsProvider, TokenServicePort } from './ports/providers.js';
+import type { GoogleOidcProviderPort, PaymentProvider, SmsProvider, TokenServicePort } from './ports/providers.js';
 import type { EventBusPort, JobQueuePort, RateLimiterPort, RevokedTokenStorePort } from './ports/state.js';
 
 export interface CompositionOverrides {
   smsProvider?: SmsProvider;
   paymentProvider?: PaymentProvider;
+  googleOidcProvider?: GoogleOidcProviderPort;
   useInMemoryState?: boolean;
 }
 
@@ -96,12 +98,22 @@ function buildCoreProviders(overrides: CompositionOverrides) {
   const payment = overrides.paymentProvider ?? new FakePaymentProvider(env.WEBHOOK_HMAC_SECRET);
   const sms = overrides.smsProvider ?? new ConsoleSmsProvider();
   const push = new FakePushProvider();
-  return { clock, ids, crypto, tokens, payment, sms, push };
+  const googleOidc =
+    overrides.googleOidcProvider ??
+    new HttpGoogleOidcProvider({
+      clientIds: env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean),
+      redirectUris: env.GOOGLE_REDIRECT_URIS.split(',').map((s) => s.trim()).filter(Boolean),
+      webClientSecret: env.GOOGLE_WEB_CLIENT_SECRET || undefined,
+      tokenEndpoint: env.GOOGLE_TOKEN_ENDPOINT,
+      jwksUri: env.GOOGLE_JWKS_URI,
+    });
+  return { clock, ids, crypto, tokens, payment, sms, push, googleOidc };
 }
 
-export function createAppContainer(overrides: CompositionOverrides = {}): AppContainer {
-  const state = buildStateAdapters(overrides.useInMemoryState ?? false);
-  const p = buildCoreProviders(overrides);
+function buildUseCases(
+  state: ReturnType<typeof buildStateAdapters>,
+  p: ReturnType<typeof buildCoreProviders>,
+) {
   const authRepo = new PostgresAuthRepository();
   const userRepo = new PostgresUserRepository();
   const addrRepo = new PostgresAddressRepository();
@@ -117,7 +129,7 @@ export function createAppContainer(overrides: CompositionOverrides = {}): AppCon
   const jobsRepo = new PostgresBackgroundJobRepository();
 
   const auth = new AuthUseCases({
-    repo: authRepo, tokens: p.tokens, crypto: p.crypto, sms: p.sms,
+    repo: authRepo, tokens: p.tokens, crypto: p.crypto, sms: p.sms, googleOidc: p.googleOidc,
     rateLimiter: state.rateLimiter, revokedTokens: state.revokedTokens, clock: p.clock, ids: p.ids,
     allowReviewDemoOtp: env.ALLOW_REVIEW_DEMO_OTP, reviewDemoPhone: env.REVIEW_DEMO_PHONE,
     reviewDemoCode: env.REVIEW_DEMO_OTP_CODE, isTestEnv: env.NODE_ENV === 'test',
@@ -130,14 +142,26 @@ export function createAppContainer(overrides: CompositionOverrides = {}): AppCon
   });
   const payments = new PaymentsUseCases(payRepo, p.payment, state.eventBus, p.clock);
   const loyalty = new LoyaltyUseCases(loyalRepo);
-  const printRt = new PrintAndRealtimeUseCases(printRepo, setRepo, state.eventBus, p.clock);
-  const admin = new AdminUseCases(adminRepo, couponRepo, delivRepo, setRepo, p.clock);
+  const printRt = new PrintAndRealtimeUseCases(printRepo, setRepo, state.eventBus, p.clock, p.tokens);
+  const admin = new AdminUseCases(adminRepo, couponRepo, delivRepo, setRepo, p.clock, p.crypto);
   const jobsUseCases = new BackgroundJobsUseCases(jobsRepo, state.eventBus, p.push, p.clock);
-  const jobQueue = state.bullRedis ? new BullMqJobAdapter(state.bullRedis, jobsUseCases) : null;
+  return { auth, users, menu, orders, payments, loyalty, printRt, admin, jobsUseCases };
+}
+
+export function createAppContainer(overrides: CompositionOverrides = {}): AppContainer {
+  const state = buildStateAdapters(overrides.useInMemoryState ?? false);
+  const p = buildCoreProviders(overrides);
+  const uc = buildUseCases(state, p);
+  const jobQueue = state.bullRedis ? new BullMqJobAdapter(state.bullRedis, uc.jobsUseCases) : null;
   const authHooks = new HttpAuthHooks(p.tokens, state.revokedTokens);
   const app = createHttpServer({
-    nodeEnv: env.NODE_ENV, adminOrigin: env.ADMIN_ORIGIN, dbHealth: new PostgresHealthAdapter(),
-    authHooks, auth, users, menu, orders, payments, loyalty, printRt, admin,
+    nodeEnv: env.NODE_ENV,
+    adminOrigin: env.ADMIN_ORIGIN,
+    dbHealth: new PostgresHealthAdapter(async () => {
+      if (state.redisClients[0]) await state.redisClients[0].ping();
+    }),
+    ...uc,
+    authHooks,
   });
 
   const shutdown = async () => {
@@ -149,8 +173,15 @@ export function createAppContainer(overrides: CompositionOverrides = {}): AppCon
 
   return {
     app, tokens: p.tokens, rateLimiter: state.rateLimiter, revokedTokens: state.revokedTokens,
-    eventBus: state.eventBus, jobsUseCases, jobQueue,
-    verifyStartup: async () => { await verifyDbSecurityPosture(); },
+    eventBus: state.eventBus, jobsUseCases: uc.jobsUseCases, jobQueue,
+    verifyStartup: async () => {
+      await verifyDbSecurityPosture();
+      if (state.redisClients[0]) {
+        await state.redisClients[0].ping().catch((err: any) => {
+          throw new Error(`Redis unavailable: ${err?.message ?? err}`);
+        });
+      }
+    },
     shutdown,
   };
 }

@@ -7,8 +7,12 @@ import {
   AdminCreateBannerSchema,
   AdminCreateCouponSchema,
   AdminCreateDriverSchema,
+  AdminCreateStaffSchema,
+  AdminCreateZoneSchema,
   AdminUpdateCouponSchema,
+  AdminUpdateDriverSchema,
   AdminUpdateSettingsSchema,
+  AdminUpdateStaffSchema,
   AdminUpdateZoneSchema,
   UuidParamSchema,
 } from '../schemas/api.schemas.js';
@@ -45,9 +49,17 @@ function registerFleetAndGovernanceRoutes(app: FastifyInstance, admin: AdminUseC
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(200).send(await admin.listZones(owner.sub));
   });
+  r.post('/api/v1/admin/zones', { schema: { body: AdminCreateZoneSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(201).send(await admin.createZone(owner.sub, req.body));
+  });
   r.patch('/api/v1/admin/zones/:id', { schema: { params: UuidParamSchema, body: AdminUpdateZoneSchema } }, async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(200).send(await admin.updateZone(owner.sub, req.params.id, req.body));
+  });
+  r.delete('/api/v1/admin/zones/:id', { schema: { params: UuidParamSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(200).send(await admin.deleteZone(owner.sub, req.params.id));
   });
   app.get('/api/v1/admin/drivers', async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);
@@ -57,9 +69,25 @@ function registerFleetAndGovernanceRoutes(app: FastifyInstance, admin: AdminUseC
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(201).send(await admin.createDriver(owner.sub, req.body));
   });
+  r.patch('/api/v1/admin/drivers/:id', { schema: { params: UuidParamSchema, body: AdminUpdateDriverSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(200).send(await admin.updateDriver(owner.sub, req.params.id, req.body));
+  });
   app.get('/api/v1/admin/staff', async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);
     return reply.status(200).send(await admin.listStaff(owner.sub));
+  });
+  r.post('/api/v1/admin/staff', { schema: { body: AdminCreateStaffSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(201).send(await admin.createStaff(owner.sub, req.body));
+  });
+  r.patch('/api/v1/admin/staff/:id', { schema: { params: UuidParamSchema, body: AdminUpdateStaffSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(200).send(await admin.updateStaff(owner.sub, req.params.id, req.body));
+  });
+  r.post('/api/v1/admin/staff/:id/reset-2fa', { schema: { params: UuidParamSchema } }, async (req, reply) => {
+    const owner = await hooks.requireStaff(req, ['owner']);
+    return reply.status(200).send(await admin.resetStaff2FA(owner.sub, req.params.id));
   });
   app.get('/api/v1/admin/fraud-flags', async (req, reply) => {
     const owner = await hooks.requireStaff(req, ['owner']);

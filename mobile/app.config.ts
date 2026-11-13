@@ -4,6 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Kardeşler Cihangir',
   slug: 'kardesler-cihangir',
+  owner: 'kardesler-cihangir',
   scheme: 'kardesler',
   version: '1.0.0',
   orientation: 'portrait',
@@ -51,7 +52,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:4000',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
     eas: {
-      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'NEEDS_CONFIRMATION',
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '8fe36c38-ddc2-4032-934e-7ff5054d0ce6',
     },
   },
 });

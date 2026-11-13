@@ -10,31 +10,43 @@ export class RedisCacheAdapter implements CachePort {
   constructor(private readonly redis: Redis) {}
 
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.redis.get(`cache:${key}`);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
+    try {
+      const raw = await this.redis.get(`cache:${key}`);
+      if (!raw) return null;
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
   }
 
   async set<T>(key: string, value: T, ttlMs: number): Promise<void> {
-    await this.redis.set(`cache:${key}`, JSON.stringify(value), 'PX', Math.max(1000, ttlMs));
+    try {
+      await this.redis.set(`cache:${key}`, JSON.stringify(value), 'PX', Math.max(1000, ttlMs));
+    } catch {
+      // Degraded cache write during Redis outage
+    }
   }
 
   async deleteByPrefix(prefix: string): Promise<void> {
-    let cursor = '0';
-    do {
-      const [next, keys] = await this.redis.scan(
-        cursor,
-        'MATCH',
-        `kardesler:cache:${prefix}*`,
-        'COUNT',
-        200,
-      );
-      cursor = next;
-      if (keys.length > 0) {
-        const unprefixed = keys.map((k) => k.replace(/^kardesler:/, ''));
-        await this.redis.del(...unprefixed);
-      }
-    } while (cursor !== '0');
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.redis.scan(
+          cursor,
+          'MATCH',
+          `kardesler:cache:${prefix}*`,
+          'COUNT',
+          200,
+        );
+        cursor = next;
+        if (keys.length > 0) {
+          const unprefixed = keys.map((k) => k.replace(/^kardesler:/, ''));
+          await this.redis.del(...unprefixed);
+        }
+      } while (cursor !== '0');
+    } catch {
+      // Degraded cache invalidation during Redis outage
+    }
   }
 }
 

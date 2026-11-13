@@ -102,5 +102,21 @@ describe('Step 3 & Step 5 Architecture, Boundaries, and Domain-DB Parity Gates',
 
     expect(ALLOWED_ORDER_TRANSITIONS.delivered).toEqual([]);
   });
+
+  it('enforces that src/domain has zero references to process.env', () => {
+    const domainFiles = walkTsFiles(path.resolve(process.cwd(), 'src/domain'));
+    for (const file of domainFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      expect(content, `Domain file ${file} accesses process.env`).not.toMatch(/process\.env/);
+    }
+  });
+
+  it('enforces that src/application does not directly import node:crypto or crypto', () => {
+    const appFiles = walkTsFiles(path.resolve(process.cwd(), 'src/application'));
+    for (const file of appFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      expect(content, `Application file ${file} imports crypto directly`).not.toMatch(/from\s+['"](node:)?crypto['"]/);
+    }
+  });
 });
 

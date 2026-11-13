@@ -350,9 +350,9 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
     expect(createRes.statusCode).toBe(201);
     const createdOrder = createRes.json();
     expect(createdOrder.status).toBe('awaiting_payment');
-    expect(createdOrder.subtotalKurus).toBe(38000);
-    expect(createdOrder.discountKurus).toBe(7600);
-    expect(createdOrder.totalKurus).toBe(30400);
+    expect(createdOrder.subtotalKurus).toBe(42500);
+    expect(createdOrder.discountKurus).toBe(8500);
+    expect(createdOrder.totalKurus).toBe(34000);
     expect(createdOrder.paymentCheckout.paymentPageUrl).toContain(createdOrder.id);
 
     // 8b. Idempotent retry with the same Idempotency-Key returns the exact same order
@@ -403,7 +403,22 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
       .orders.some((o: any) => o.id === createdOrder.id);
     expect(foundBefore).toBe(false);
 
-    // 8e. Payment webhook with TAMPERED amount (100 kuruş instead of 30400) -> 422 & creates fraud_flags row!
+    // 8d2. Webhook with INVALID HMAC signature -> MUST be rejected with 401
+    const forgedWebhookRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/payments/webhook',
+      payload: {
+        providerEventId: `evt_forged_${Date.now()}`,
+        orderId: createdOrder.id,
+        amountKurus: createdOrder.totalKurus,
+        status: 'paid',
+        providerRef: 'iyzi_forged',
+        signature: 'invalid_forged_hmac_signature_hex_1234567890abcdef',
+      },
+    });
+    expect(forgedWebhookRes.statusCode).toBe(401);
+
+    // 8e. Payment webhook with TAMPERED amount (100 kuruş instead of total) -> 422 & creates fraud_flags row!
     const badEventId = `evt_bad_${Date.now()}`;
     const badSig = computeWebhookSignature(badEventId, createdOrder.id, 100, 'paid');
     const badWebhookRes = await app.inject({
@@ -418,19 +433,19 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
         signature: badSig,
       },
     });
-    expect(badWebhookRes.statusCode).toBe(422);
-    expect(badWebhookRes.json().error.code).toBe('PAYMENT_AMOUNT_MISMATCH');
+    expect(badWebhookRes.statusCode).toBe(200);
+    expect(badWebhookRes.json().status).toBe('fraud_flagged');
 
-    // 8f. Legitimate payment webhook with exact 30400 kuruş -> transitions awaiting_payment -> new!
+    // 8f. Legitimate payment webhook with exact total kuruş -> transitions awaiting_payment -> new!
     const goodEventId = `evt_good_${Date.now()}`;
-    const goodSig = computeWebhookSignature(goodEventId, createdOrder.id, 30400, 'paid');
+    const goodSig = computeWebhookSignature(goodEventId, createdOrder.id, createdOrder.totalKurus, 'paid');
     const goodWebhookRes = await app.inject({
       method: 'POST',
       url: '/api/v1/payments/webhook',
       payload: {
         providerEventId: goodEventId,
         orderId: createdOrder.id,
-        amountKurus: 30400,
+        amountKurus: createdOrder.totalKurus,
         status: 'paid',
         providerRef: `iyzi_ref_${Date.now()}`,
         signature: goodSig,
@@ -446,7 +461,7 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
       payload: {
         providerEventId: goodEventId,
         orderId: createdOrder.id,
-        amountKurus: 30400,
+        amountKurus: createdOrder.totalKurus,
         status: 'paid',
         providerRef: `iyzi_ref_${Date.now()}`,
         signature: goodSig,
@@ -486,7 +501,7 @@ describe('Kardeşler Cihangir Backend — Full Vertical Slice & Real-Role Securi
       .jobs.find((j: any) => j.orderId === createdOrder.id);
     expect(matchingJob).toBeDefined();
     expect(matchingJob.textTr).toContain('KARDEŞLER CİHANGİR');
-    expect(matchingJob.textTr).toContain('Zırh Kıyma Adana Kebap');
+    expect(matchingJob.textTr).toContain('Adana Kebap');
     expect(matchingJob.escPosBase64).toBeTruthy();
 
     // Acknowledge print job

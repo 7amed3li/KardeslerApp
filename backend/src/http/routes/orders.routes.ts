@@ -1,14 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { OrdersUseCases } from '../../application/orders/orders.use-cases.js';
-import type { PaymentsUseCases } from '../../application/payments/payments.use-cases.js';
 import type { HttpAuthHooks } from '../auth-hooks.js';
 import {
   CancelOrderBodySchema,
   CreateOrderBodySchema,
   QuoteRequestSchema,
   UuidParamSchema,
-  WebhookBodySchema,
 } from '../schemas/api.schemas.js';
 
 function registerQuoteAndCreateRoutes(app: FastifyInstance, orders: OrdersUseCases, hooks: HttpAuthHooks): void {
@@ -28,10 +26,9 @@ function registerQuoteAndCreateRoutes(app: FastifyInstance, orders: OrdersUseCas
   });
 }
 
-function registerOrderHistoryAndWebhookRoutes(
+function registerOrderHistoryRoutes(
   app: FastifyInstance,
   orders: OrdersUseCases,
-  payments: PaymentsUseCases,
   hooks: HttpAuthHooks,
 ): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -51,17 +48,13 @@ function registerOrderHistoryAndWebhookRoutes(
     const c = await hooks.requireCustomer(req);
     return reply.status(200).send(await orders.reorderPreview(c.sub, req.params.id));
   });
-  r.post('/api/v1/payments/webhook', { schema: { body: WebhookBodySchema } }, async (req, reply) => {
-    return reply.status(200).send(await payments.processWebhook(req.body));
-  });
 }
 
 export function registerOrderRoutes(
   app: FastifyInstance,
   orders: OrdersUseCases,
-  payments: PaymentsUseCases,
   hooks: HttpAuthHooks,
 ): void {
   registerQuoteAndCreateRoutes(app, orders, hooks);
-  registerOrderHistoryAndWebhookRoutes(app, orders, payments, hooks);
+  registerOrderHistoryRoutes(app, orders, hooks);
 }

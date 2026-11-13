@@ -9,6 +9,7 @@ async function bootstrap(): Promise<void> {
     const address = await container.app.listen({ port: env.PORT, host: env.HOST });
     console.log(`Kardeşler Cihangir Backend API running at ${address}`);
   } catch (err) {
+    console.error('FATAL POSTURE ERROR:', err instanceof Error ? err.message : err);
     container.app.log.fatal({ err }, 'Startup failed');
     await container.shutdown();
     process.exit(1);

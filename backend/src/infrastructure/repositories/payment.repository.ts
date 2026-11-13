@@ -110,4 +110,21 @@ export class PostgresPaymentRepository implements PaymentRepository {
       return true;
     });
   }
+
+  async getOrderPaymentForCheckout(userId: string, orderId: string) {
+    return withTx({ role: 'customer', userId }, async (tx) => {
+      const [order] = await tx
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.id, orderId))
+        .limit(1);
+      if (!order) return null;
+      return {
+        totalKurus: Number(order.totalKurus),
+        customerName: order.customerNameSnapshot,
+        customerPhone: order.customerPhoneSnapshot,
+        status: order.status,
+      };
+    });
+  }
 }

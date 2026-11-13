@@ -1,15 +1,18 @@
-import React, { createContext, useContext } from 'react';
-import { useColorScheme } from 'react-native';
-import { colors, radii, spacing, typography } from '../tokens';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { AccessibilityInfo, useColorScheme } from 'react-native';
+import { colors, hitTarget, radii, spacing, typography } from '../tokens';
+import type { ColorPalette } from '../tokens/colors';
 
 export type ColorMode = 'light' | 'dark';
 
 export interface Theme {
   mode: ColorMode;
-  colors: (typeof colors)[ColorMode];
+  colors: ColorPalette;
   spacing: typeof spacing;
   radii: typeof radii;
   typography: typeof typography;
+  hitTarget: typeof hitTarget;
+  reducedMotion: boolean;
 }
 
 const lightTheme: Theme = {
@@ -18,6 +21,8 @@ const lightTheme: Theme = {
   spacing,
   radii,
   typography,
+  hitTarget,
+  reducedMotion: false,
 };
 
 const darkTheme: Theme = {
@@ -26,6 +31,8 @@ const darkTheme: Theme = {
   spacing,
   radii,
   typography,
+  hitTarget,
+  reducedMotion: false,
 };
 
 const ThemeContext = createContext<Theme>(lightTheme);
@@ -38,12 +45,31 @@ export function ThemeProvider({
   forcedMode?: ColorMode;
 }) {
   const systemScheme = useColorScheme();
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReducedMotion(enabled);
+      })
+      .catch(() => {});
+
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (enabled) => {
+      setReducedMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      sub?.remove?.();
+    };
+  }, []);
+
   const mode: ColorMode = forcedMode ?? (systemScheme === 'dark' ? 'dark' : 'light');
-  const value = mode === 'dark' ? darkTheme : lightTheme;
+  const base = mode === 'dark' ? darkTheme : lightTheme;
+  const value: Theme = { ...base, reducedMotion };
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): Theme {
   return useContext(ThemeContext);
 }
-

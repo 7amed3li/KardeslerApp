@@ -48,3 +48,7 @@ No endpoints or fields have been invented in the mobile app. Each gap below is h
 - **Current state:** `GET /api/v1/settings/public` returns restaurant open/paused status and opening hours; verify whether `min_app_version` / `minimum_app_version` is present in `settings/public` or requires adding to `settings.public`.
 - **Mobile workaround:** Mobile checks `min_app_version` defensively if present in `GET /api/v1/settings/public` and documents required store legal URLs in `mobile/docs/store-readiness.md`.
 
+## 10. Google Sign-In Cloud Console Credentials (`NEEDS CONFIRMATION`)
+- **Current state:** Backend OIDC PKCE exchange (`POST /api/v1/auth/customer/google/exchange`), JWKS signature/claims verification (`HttpGoogleOidcProvider`), `user_identities` linking/unlinking, and mobile PKCE UI (`AuthModalScreen`) are implemented and verified against local JWKS + PostgreSQL.
+- **Unverified / Blocked externally:** Real Google Cloud Console project OAuth Client IDs (`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_IDS`), `GOOGLE_WEB_CLIENT_SECRET`, and Android/iOS production signing fingerprints (SHA-1/SHA-256) are not present in this workspace (`NEEDS CONFIRMATION`). Live physical-device Google Sign-In cannot be verified until those credentials are configured per `mobile/docs/google-auth-setup.md`.
+

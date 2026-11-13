@@ -25,6 +25,14 @@ export class HttpAuthHooks {
   }
 
   async requireStaff(request: FastifyRequest, allowedRoles: readonly StaffRole[] = ['staff', 'owner']) {
+    const qTicket = (request.query as Record<string, string | undefined>)?.ticket;
+    if (qTicket) {
+      const payload = await this.tokens.verifyStaffSseTicket(qTicket);
+      if (!allowedRoles.includes(payload.role)) {
+        throw new DomainError('FORBIDDEN', 403, 'Bu işlem için yetki seviyeniz yetersiz (Sadece Owner)');
+      }
+      return payload;
+    }
     const payload = await this.tokens.verifyStaffToken(this.extractBearer(request));
     if (!allowedRoles.includes(payload.role)) {
       throw new DomainError('FORBIDDEN', 403, 'Bu işlem için yetki seviyeniz yetersiz (Sadece Owner)');

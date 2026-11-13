@@ -16,4 +16,30 @@ export default tseslint.config(
       'max-lines-per-function': ['error', { max: 60, skipBlankLines: false, skipComments: false }],
     },
   },
+  {
+    files: ['src/domain/**/*.ts', 'src/application/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message: 'process.env is strictly forbidden in src/domain and src/application. Pass configuration through ports or parameters.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/application/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'crypto', message: 'crypto must not be imported in application/. Cryptographic functions belong in infrastructure/security via ports.' },
+            { name: 'node:crypto', message: 'node:crypto must not be imported in application/. Cryptographic functions belong in infrastructure/security via ports.' },
+          ],
+        },
+      ],
+    },
+  },
 );

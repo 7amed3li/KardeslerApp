@@ -456,18 +456,18 @@ describe('Step 4.1 Characterization Suite: Pins All 43 Baseline Endpoints Before
     });
     expect(revoke.statusCode).toBe(200);
 
-    // PATCH alias for status -> on_the_way -> delivered
+    // Canonical status transition -> on_the_way -> delivered
     const otw = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/orders/${createdOrderId}/status`,
+      method: 'POST',
+      url: `/api/v1/staff/orders/${createdOrderId}/status`,
       headers: { authorization: `Bearer ${staffToken}` },
       payload: { status: 'on_the_way' },
     });
     expect(otw.statusCode).toBe(200);
 
     const deliv = await app.inject({
-      method: 'PATCH',
-      url: `/api/v1/orders/${createdOrderId}/status`,
+      method: 'POST',
+      url: `/api/v1/staff/orders/${createdOrderId}/status`,
       headers: { authorization: `Bearer ${staffToken}` },
       payload: { status: 'delivered' },
     });

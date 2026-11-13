@@ -5,6 +5,7 @@ import { JoseTokenService } from '../src/infrastructure/security/jose-token.serv
 import { InMemoryRevokedTokenStore } from '../src/infrastructure/redis/in-memory-adapters.js';
 import { HttpAuthHooks } from '../src/http/auth-hooks.js';
 import { ENDPOINT_TEST_REGISTRY } from './endpoint-registry.js';
+import { buildRouteDimensionMatrix, writeTestMatrixDoc } from './test-matrix-generator.js';
 
 describe('Step 5 Route-Coverage Gate (Untested Endpoints Break CI)', () => {
   const tokens = new JoseTokenService({
@@ -47,7 +48,37 @@ describe('Step 5 Route-Coverage Gate (Untested Endpoints Break CI)', () => {
 
     expect(missingFromTests, `Untested routes detected: ${missingFromTests.join(', ')}`).toEqual([]);
     expect(staleInRegistry, `Stale registry routes: ${staleInRegistry.join(', ')}`).toEqual([]);
-    expect(liveRoutes.size).toBe(66);
+    expect(liveRoutes.size).toBe(80);
+  });
+
+  it('fails if ANY route dimension (happy, validation, authN, authZ/IDOR, rate-limit, idempotency, DB side-effects, concurrency) is missing without explicit N/A', () => {
+    const matrix = buildRouteDimensionMatrix();
+    expect(matrix.length).toBe(80);
+
+    for (const entry of matrix) {
+      const dimensions = [
+        ['happy', entry.happy],
+        ['validation', entry.validation],
+        ['authN', entry.authN],
+        ['authZ_IDOR', entry.authZ_IDOR],
+        ['rateLimit', entry.rateLimit],
+        ['idempotency', entry.idempotency],
+        ['dbSideEffects', entry.dbSideEffects],
+        ['concurrency', entry.concurrency],
+      ] as const;
+
+      for (const [dimName, val] of dimensions) {
+        const isAsserted = typeof val === 'string' && val.startsWith('Asserted:');
+        const isExplicitNA = typeof val === 'string' && val.startsWith('N/A:');
+        expect(
+          isAsserted || isExplicitNA,
+          `Route ${entry.method} ${entry.path} dimension "${dimName}" is missing an assertion or explicit N/A justification! Got: "${val}"`,
+        ).toBe(true);
+      }
+    }
+
+    const docPath = writeTestMatrixDoc();
+    expect(docPath).toContain('test-matrix.md');
   });
 });
 

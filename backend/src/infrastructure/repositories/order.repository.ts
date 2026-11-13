@@ -237,5 +237,29 @@ export class PostgresOrderRepository implements OrderRepository {
       return job;
     });
   }
+
+  async searchStaffOrders(staffId: string, role: 'staff' | 'owner', query: string) {
+    return withTx({ role, staffId }, async (tx) => {
+      const q = `%${query.trim()}%`;
+      const rows = await tx.execute(sql`
+        SELECT id, order_number AS "orderNumber", business_date AS "businessDate",
+          status, order_type AS "orderType", payment_method AS "paymentMethod",
+          customer_name_snapshot AS "customerName", customer_phone_snapshot AS "customerPhone",
+          subtotal_kurus::bigint AS "subtotalKurus", total_kurus::bigint AS "totalKurus",
+          created_at AS "createdAt"
+        FROM public.orders
+        WHERE (customer_phone_snapshot ILIKE ${q}
+           OR customer_name_snapshot ILIKE ${q}
+           OR order_number::text ILIKE ${q})
+          AND (
+            public.app_current_role() IN ('owner', 'system')
+            OR status <> 'awaiting_payment'
+          )
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
+      return [...rows];
+    });
+  }
 }
 

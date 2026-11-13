@@ -35,7 +35,12 @@ export class PaymentsUseCases {
       throw new DomainError('NOT_FOUND', 404, 'Ödeme bildirimi yapılan sipariş bulunamadı');
     }
     if (res.outcome === 'amount_mismatch') {
-      throw new DomainError('PAYMENT_AMOUNT_MISMATCH', 422, 'Ödenen tutar sipariş toplamı ile eşleşmiyor');
+      return {
+        idempotentReplay: false,
+        orderId: payload.orderId,
+        status: 'fraud_flagged',
+        message: 'Tutar uyumsuzluğu tespit edildi ve sahtekarlık incelemesine alındı',
+      };
     }
     if (res.outcome === 'activated') {
       await this.eventBus.publish('order.created', {
@@ -47,6 +52,26 @@ export class PaymentsUseCases {
     }
 
     return { idempotentReplay: false, orderId: payload.orderId, status: res.orderStatus };
+  }
+
+  async createPaymentSession(userId: string, orderId: string, callbackUrl?: string) {
+    const detail = await this.paymentRepo.getOrderPaymentForCheckout(userId, orderId);
+    if (!detail) throw new DomainError('NOT_FOUND', 404, 'Ödeme oturumu açılacak sipariş bulunamadı');
+    if (detail.status !== 'awaiting_payment') {
+      throw new DomainError('INVALID_STATE_TRANSITION', 409, 'Sipariş ödeme bekleme durumunda değil');
+    }
+    const session = await this.provider.initializePayment({
+      orderId,
+      amountKurus: detail.totalKurus,
+      customerName: detail.customerName,
+      customerPhone: detail.customerPhone,
+      callbackUrl: callbackUrl ?? 'https://app.kardeslercihangir.com/checkout/callback',
+    });
+    return {
+      orderId,
+      paymentSessionUrl: session.paymentPageUrl,
+      token: session.token,
+    };
   }
 }
 

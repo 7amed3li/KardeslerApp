@@ -1,6 +1,12 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { withTx, schema } from '../db/client.js';
 import type { AuthRepository, OtpRecord, StaffAuthRecord, UserProfile } from '../../ports/repositories.js';
+import {
+  findOrProvisionGoogleUserTx,
+  linkGoogleIdentityTx,
+  listCustomerIdentitiesTx,
+  unlinkCustomerIdentityTx,
+} from './google-identity.helper.js';
 
 export class PostgresAuthRepository implements AuthRepository {
   async getLatestUnconsumedOtp(phone: string): Promise<OtpRecord | null> {
@@ -214,6 +220,41 @@ export class PostgresAuthRepository implements AuthRepository {
       if (!updated) return null;
       return { id: updated.id, email: updated.email, role: updated.role as 'owner' | 'staff' };
     });
+  }
+
+  async findOrProvisionGoogleUserAndSession(input: {
+    providerSubject: string;
+    email: string | null;
+    name: string | null;
+    newReferralCode: string;
+    refreshTokenHash: string;
+    familyId: string;
+    refreshExpiresAt: Date;
+    deviceInfo: string | null;
+    now: Date;
+  }): Promise<{ user: UserProfile; isNewUser: boolean }> {
+    return findOrProvisionGoogleUserTx(input);
+  }
+
+  async linkGoogleIdentity(input: {
+    userId: string;
+    providerSubject: string;
+    email: string | null;
+  }): Promise<{ status: 'linked' | 'already_linked_self' | 'already_linked_other' | 'provider_already_linked_to_user' }> {
+    return linkGoogleIdentityTx(input);
+  }
+
+  async unlinkCustomerIdentity(input: {
+    userId: string;
+    provider: 'google';
+  }): Promise<{ status: 'ok' | 'no_fallback_login' | 'not_found' }> {
+    return unlinkCustomerIdentityTx(input);
+  }
+
+  async listCustomerIdentities(
+    userId: string,
+  ): Promise<Array<{ provider: string; emailAtLink: string | null; createdAt: string }>> {
+    return listCustomerIdentitiesTx(userId);
   }
 }
 

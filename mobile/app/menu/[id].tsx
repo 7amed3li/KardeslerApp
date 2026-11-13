@@ -1,8 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Heart } from 'lucide-react-native';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Heart,
+  Minus,
+  Plus,
+} from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
+  I18nManager,
   Image,
   Pressable,
   ScrollView,
@@ -12,16 +21,17 @@ import {
   View,
 } from 'react-native';
 import { queryKeys } from '../../src/api/query-keys';
-import { RESTAURANT_CONFIG } from '../../src/config/restaurant';
 import { useCartStore } from '../../src/features/cart/model/cart.store';
 import { fetchMenu } from '../../src/features/menu/api/menu.api';
 import {
   groupMenuItemOptions,
   validateOptionSelection,
+  type OptionGroup,
 } from '../../src/features/menu/model/menu.model';
 import { useTranslations } from '../../src/i18n';
-import { resolveDishImage } from '../../src/ui/assets/dishImages';
-import { Button, Card, PriceText, Screen, StateView } from '../../src/ui/components';
+import { formatTryFromKurus } from '../../src/lib/money/format';
+import { resolveOptionalDishImage } from '../../src/ui/assets/dishImages';
+import { Badge, Button, Card, PriceText, Screen, StateView } from '../../src/ui/components';
 import { useTheme } from '../../src/ui/themes/ThemeProvider';
 
 export default function ProductDetailScreen() {
@@ -47,29 +57,86 @@ export default function ProductDetailScreen() {
     () => (item ? groupMenuItemOptions(item.options) : []),
     [item],
   );
+  const requiredGroups = useMemo(
+    () => groups.filter((g) => g.isRequired || g.minSelect > 0),
+    [groups],
+  );
+  const optionalGroups = useMemo(
+    () => groups.filter((g) => !g.isRequired && g.minSelect === 0),
+    [groups],
+  );
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedQuickNotes, setSelectedQuickNotes] = useState<string[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
 
-  if (isLoading) return <StateView kind="loading" />;
+  const itemCategoryName = useMemo(() => {
+    if (!item || !data?.categories) return '';
+    return data.categories.find((c) => c.id === item.categoryId)?.name ?? '';
+  }, [data?.categories, item]);
+
+  const isFoodItem = useMemo(() => {
+    const lower = itemCategoryName.toLocaleLowerCase('tr-TR');
+    return !lower.includes('içecek') && !lower.includes('drink') && !lower.includes('مشروب');
+  }, [itemCategoryName]);
+
+  const quickNoteChoices = useMemo(
+    () => [
+      { id: 'acisiz', trText: 'Acısız', label: t.menu.quickNoteNoSpice },
+      { id: 'sogansiz', trText: 'Soğansız', label: t.menu.quickNoteNoOnion },
+      { id: 'az-pismis', trText: 'Az pişmiş', label: t.menu.quickNoteMediumRare },
+      { id: 'tuzsuz', trText: 'Tuzsuz', label: t.menu.quickNoteNoSalt },
+    ],
+    [t],
+  );
+
+  const toggleQuickNote = (trText: string) => {
+    setSelectedQuickNotes((prev) =>
+      prev.includes(trText) ? prev.filter((x) => x !== trText) : [...prev, trText],
+    );
+  };
+
+  const validation = useMemo(
+    () => validateOptionSelection(groups, selectedIds),
+    [groups, selectedIds],
+  );
+
+  const provisionalTotalKurus = useMemo(() => {
+    if (!item) return 0;
+    const optionMap = new Map(item.options.map((o) => [o.id, o.priceDeltaKurus]));
+    const delta = selectedIds.reduce((sum, optId) => sum + (optionMap.get(optId) ?? 0), 0);
+    return (item.priceKurus + delta) * quantity;
+  }, [item, selectedIds, quantity]);
+
+  const BackIcon = I18nManager.isRTL ? ArrowRight : ArrowLeft;
+
+  if (isLoading) {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <StateView kind="loading" title={t.common.loading} />
+      </Screen>
+    );
+  }
+
   if (isError || !item) {
     return (
-      <StateView
-        kind="error"
-        title={t.common.errorTitle}
-        onRetry={() => void refetch()}
-        actionLabel={t.common.back}
-        onAction={() => router.back()}
-      />
+      <Screen edges={['top', 'bottom']}>
+        <StateView
+          kind="error"
+          title={t.common.errorTitle}
+          actionLabel={t.common.retry}
+          onAction={() => void refetch()}
+        />
+      </Screen>
     );
   }
 
   const isFav = favoriteIds.includes(item.id);
+  const canAdd = item.isAvailable && validation.valid;
+  const heroImage = resolveOptionalDishImage(item.name, item.imageUrl);
 
   const toggleOption = (groupId: string, optionId: string, maxSelect: number) => {
-    setValidationError(null);
     const groupOptionIds = new Set(
       groups.find((g) => g.groupId === groupId)?.options.map((o) => o.id) ?? [],
     );
@@ -89,15 +156,17 @@ export default function ProductDetailScreen() {
     });
   };
 
-  const handleAdd = () => {
-    const check = validateOptionSelection(groups, selectedIds);
-    if (!check.valid) {
-      setValidationError(`${check.missingGroupName ?? ''} (${t.menu.requiredOption})`);
-      return;
-    }
-    const chosenNames = item.options
+  const handleAddToCart = () => {
+    if (!canAdd) return;
+    const optionNames = item.options
       .filter((o) => selectedIds.includes(o.id))
       .map((o) => o.name);
+    const combinedNote = [
+      ...selectedQuickNotes,
+      ...(note.trim() ? [note.trim()] : []),
+    ]
+      .join(', ')
+      .slice(0, 100);
 
     addItem({
       menuItemId: item.id,
@@ -105,197 +174,471 @@ export default function ProductDetailScreen() {
       imageUrl: item.imageUrl,
       quantity,
       optionIds: selectedIds,
-      optionNames: chosenNames,
-      note: note.trim() || undefined,
+      optionNames,
+      note: combinedNote.length > 0 ? combinedNote : undefined,
     });
     router.back();
   };
 
+  const renderGroup = (group: OptionGroup, isReq: boolean) => {
+    const limitLabel =
+      group.maxSelect === 1
+        ? t.menu.exactSelect.replace('{{count}}', '1')
+        : group.maxSelect > 1
+          ? t.menu.maxSelect.replace('{{count}}', String(group.maxSelect))
+          : null;
+
+    return (
+      <Card key={group.groupId} variant="elevated" style={{ gap: theme.spacing.xs }}>
+        <View style={styles.groupHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+              {group.groupName}
+            </Text>
+            {limitLabel ? (
+              <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+                {limitLabel}
+              </Text>
+            ) : null}
+          </View>
+          <Badge
+            label={isReq ? t.menu.requiredOption : t.menu.optional}
+            tone={isReq ? 'primary' : 'neutral'}
+          />
+        </View>
+
+        <View style={{ gap: theme.spacing.xs }}>
+          {group.options.map((opt) => {
+            const selected = selectedIds.includes(opt.id);
+            const disabledOpt = !opt.isAvailable;
+            return (
+              <Pressable
+                key={opt.id}
+                disabled={disabledOpt}
+                onPress={() => toggleOption(group.groupId, opt.id, group.maxSelect)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected, disabled: disabledOpt }}
+                style={[
+                  styles.optionRow,
+                  {
+                    minHeight: theme.hitTarget.min,
+                    paddingHorizontal: theme.spacing.sm,
+                    paddingVertical: theme.spacing.xs,
+                    borderRadius: theme.radii.sm,
+                    borderColor: selected ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: selected
+                      ? theme.colors.primarySoft
+                      : theme.colors.surface,
+                    opacity: disabledOpt ? 0.5 : 1,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.checkBox,
+                    {
+                      borderColor: selected ? theme.colors.primary : theme.colors.textMuted,
+                      backgroundColor: selected ? theme.colors.primary : 'transparent',
+                      borderRadius: group.maxSelect === 1 ? theme.radii.full : 4,
+                    },
+                  ]}
+                >
+                  {selected ? <Check size={13} color={theme.colors.primaryText} /> : null}
+                </View>
+                <Text
+                  style={[
+                    theme.typography.body,
+                    { color: theme.colors.text, flex: 1 },
+                  ]}
+                >
+                  {opt.name}
+                  {disabledOpt ? ` (${t.common.soldOut})` : ''}
+                </Text>
+                {opt.priceDeltaKurus > 0 ? (
+                  <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>
+                    +{formatTryFromKurus(opt.priceDeltaKurus, language)}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
+    );
+  };
+
   return (
     <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Image
-          source={resolveDishImage(item.name, item.imageUrl)}
-          style={styles.heroImg}
-          resizeMode="cover"
-        />
+      {/* Top Nav Bar */}
+      <View
+        style={[
+          styles.topBar,
+          {
+            paddingHorizontal: theme.spacing.md,
+            paddingVertical: theme.spacing.xs,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={t.common.back}
+          style={[styles.iconBtn, { minWidth: theme.hitTarget.min, minHeight: theme.hitTarget.min }]}
+        >
+          <BackIcon size={20} color={theme.colors.text} />
+        </Pressable>
+        <Text style={[theme.typography.titleSm, { color: theme.colors.text, flex: 1 }]} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Pressable
+          onPress={() => toggleFavorite(item.id)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isFav }}
+          style={[styles.iconBtn, { minWidth: theme.hitTarget.min, minHeight: theme.hitTarget.min }]}
+        >
+          <Heart
+            size={20}
+            color={isFav ? theme.colors.primary : theme.colors.textMuted}
+            fill={isFav ? theme.colors.primary : 'none'}
+          />
+        </Pressable>
+      </View>
 
-        <View style={styles.content}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{item.name}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t.menu.favoritesOnly}
-              onPress={() => toggleFavorite(item.id)}
-              style={styles.favBtn}
-            >
-              <Heart
-                size={22}
-                color={isFav ? theme.colors.error : theme.colors.textSecondary}
-                fill={isFav ? theme.colors.error : 'transparent'}
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: theme.spacing.xxl,
+        }}
+      >
+        {heroImage ? (
+          <Image
+            source={heroImage}
+            style={[styles.hero, { backgroundColor: theme.colors.surface }]}
+            resizeMode="cover"
+          />
+        ) : null}
+
+        <View style={{ padding: theme.spacing.md, gap: theme.spacing.md }}>
+          {/* Primary Info: Name, Price, Description, Allergens */}
+          <View style={{ gap: theme.spacing.xs }}>
+            <View style={styles.titlePriceRow}>
+              <Text style={[theme.typography.titleLg, { color: theme.colors.text, flex: 1 }]}>
+                {item.name}
+              </Text>
+              <PriceText
+                kurus={item.priceKurus}
+                locale={language}
+                style={{ fontSize: 20, fontWeight: '700', color: theme.colors.primary }}
               />
-            </Pressable>
-          </View>
+            </View>
 
-          <PriceText kurus={item.priceKurus} style={styles.price} />
+            {!item.isAvailable ? (
+              <Badge label={t.menu.soldOutHint} tone="error" />
+            ) : null}
 
-          {item.description ? (
-            <Text style={[styles.desc, { color: theme.colors.textSecondary }]}>
-              {item.description}
-            </Text>
-          ) : null}
+            {item.description ? (
+              <Text style={[theme.typography.body, { color: theme.colors.textSecondary }]}>
+                {item.description}
+              </Text>
+            ) : null}
 
-          {item.allergens.length > 0 ? (
-            <View style={styles.allergensRow}>
-              <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>
+            {/* Allergens */}
+            <View style={[styles.allergenWrap, { gap: theme.spacing.xs, marginTop: theme.spacing.xxs }]}>
+              <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
                 {t.menu.allergens}:
               </Text>
-              {item.allergens.map((a) => (
-                <View
-                  key={a}
-                  style={[styles.badge, { backgroundColor: theme.colors.surfaceElevated }]}
-                >
-                  <Text style={[styles.badgeText, { color: theme.colors.accent }]}>{a}</Text>
-                </View>
-              ))}
+              {item.allergens.length > 0 ? (
+                item.allergens.map((a) => <Badge key={a} label={a} tone="accent" />)
+              ) : (
+                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                  {t.menu.noAllergens}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Required Option Groups */}
+          {requiredGroups.length > 0 ? (
+            <View style={{ gap: theme.spacing.sm }}>
+              {requiredGroups.map((g) => renderGroup(g, true))}
             </View>
           ) : null}
 
-          {groups.map((group) => (
-            <Card key={group.groupId} style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <Text style={[styles.groupTitle, { color: theme.colors.text }]}>
-                  {group.groupName}
-                </Text>
-                <Text style={[styles.groupReq, { color: theme.colors.accent }]}>
-                  {group.isRequired || group.minSelect > 0
-                    ? t.menu.requiredOption
-                    : t.menu.optional}
-                </Text>
+          {/* Optional Option Groups */}
+          {optionalGroups.length > 0 ? (
+            <View style={{ gap: theme.spacing.sm }}>
+              {optionalGroups.map((g) => renderGroup(g, false))}
+            </View>
+          ) : null}
+
+          {/* Quick Kitchen Notes for Food Items */}
+          {isFoodItem ? (
+            <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+              <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                {t.menu.quickNotesTitle}
+              </Text>
+              <View style={styles.quickNotesWrap}>
+                {quickNoteChoices.map((qn) => {
+                  const active = selectedQuickNotes.includes(qn.trText);
+                  return (
+                    <Pressable
+                      key={qn.id}
+                      onPress={() => toggleQuickNote(qn.trText)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: active }}
+                      style={[
+                        styles.quickNoteChip,
+                        {
+                          borderColor: active ? theme.colors.primary : theme.colors.border,
+                          backgroundColor: active
+                            ? theme.colors.primarySoft
+                            : theme.colors.surface,
+                          borderRadius: theme.radii.full,
+                          paddingHorizontal: theme.spacing.sm,
+                          paddingVertical: theme.spacing.xs,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.quickCheck,
+                          {
+                            borderColor: active ? theme.colors.primary : theme.colors.textMuted,
+                            backgroundColor: active ? theme.colors.primary : 'transparent',
+                          },
+                        ]}
+                      >
+                        {active ? <Check size={11} color={theme.colors.primaryText} /> : null}
+                      </View>
+                      <Text
+                        style={[
+                          theme.typography.label,
+                          { color: active ? theme.colors.primary : theme.colors.text },
+                        ]}
+                      >
+                        {qn.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-
-              {group.options.map((opt) => {
-                const selected = selectedIds.includes(opt.id);
-                return (
-                  <Pressable
-                    key={opt.id}
-                    disabled={!opt.isAvailable}
-                    onPress={() => toggleOption(group.groupId, opt.id, group.maxSelect)}
-                    style={[
-                      styles.optRow,
-                      {
-                        borderColor: selected ? theme.colors.primary : theme.colors.border,
-                        backgroundColor: selected
-                          ? theme.colors.surfaceElevated
-                          : 'transparent',
-                        opacity: opt.isAvailable ? 1 : 0.45,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.optName, { color: theme.colors.text }]}>{opt.name}</Text>
-                    {opt.priceDeltaKurus > 0 ? (
-                      <PriceText kurus={opt.priceDeltaKurus} />
-                    ) : null}
-                  </Pressable>
-                );
-              })}
             </Card>
-          ))}
+          ) : null}
 
-          <View style={styles.noteBlock}>
-            <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>
+          {/* Note Input with Allergy Disclaimer */}
+          <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+            <Text style={[theme.typography.label, { color: theme.colors.text }]}>
               {t.menu.noteLabel}
             </Text>
             <TextInput
               value={note}
-              onChangeText={(txt) => setNote(txt.slice(0, RESTAURANT_CONFIG.noteMaxLength))}
+              onChangeText={(txt) => setNote(txt.slice(0, 100))}
+              maxLength={100}
+              multiline
               placeholder={t.menu.notePlaceholder}
               placeholderTextColor={theme.colors.textMuted}
-              maxLength={RESTAURANT_CONFIG.noteMaxLength}
               style={[
+                theme.typography.body,
                 styles.noteInput,
                 {
-                  borderColor: theme.colors.border,
-                  backgroundColor: theme.colors.surface,
                   color: theme.colors.text,
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                  padding: theme.spacing.sm,
                 },
               ]}
             />
-          </View>
-
-          <View style={styles.qtyRow}>
-            <Button
-              title="-"
-              variant="secondary"
-              onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-              style={styles.qtyBtn}
-            />
-            <Text style={[styles.qtyText, { color: theme.colors.text }]}>{quantity}</Text>
-            <Button
-              title="+"
-              variant="secondary"
-              onPress={() => setQuantity((q) => Math.min(20, q + 1))}
-              style={styles.qtyBtn}
-            />
-          </View>
-
-          {validationError ? (
-            <Text style={[styles.errText, { color: theme.colors.error }]}>{validationError}</Text>
-          ) : null}
-
-          <View style={styles.actions}>
-            <Button
-              title={item.isAvailable ? t.menu.addToCart : t.common.soldOut}
-              disabled={!item.isAvailable}
-              onPress={handleAdd}
-            />
-            <Button title={t.common.back} variant="outline" onPress={() => router.back()} />
-          </View>
+            <View style={styles.disclaimerRow}>
+              <AlertCircle size={14} color={theme.colors.textMuted} />
+              <Text style={[theme.typography.caption, { color: theme.colors.textMuted, flex: 1 }]}>
+                {t.menu.noteAllergyDisclaimer}
+              </Text>
+              <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+                {note.length}/100
+              </Text>
+            </View>
+          </Card>
         </View>
       </ScrollView>
+
+      {/* Bottom Sticky Add-to-Cart Bar */}
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: theme.colors.surfaceElevated,
+            borderTopColor: theme.colors.border,
+            padding: theme.spacing.md,
+            gap: theme.spacing.xs,
+          },
+        ]}
+      >
+        <View style={styles.footerTop}>
+          <View style={[styles.qtyGroup, { gap: theme.spacing.xs }]}>
+            <Pressable
+              onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+              accessibilityRole="button"
+              accessibilityLabel="-"
+              style={[
+                styles.qtyBtn,
+                {
+                  minWidth: theme.hitTarget.min,
+                  minHeight: theme.hitTarget.min,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                },
+              ]}
+            >
+              <Minus size={16} color={theme.colors.text} />
+            </Pressable>
+            <Text
+              style={[
+                theme.typography.titleSm,
+                { color: theme.colors.text, minWidth: 26, textAlign: 'center' },
+              ]}
+            >
+              {quantity}
+            </Text>
+            <Pressable
+              onPress={() => setQuantity((q) => q + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="+"
+              style={[
+                styles.qtyBtn,
+                {
+                  minWidth: theme.hitTarget.min,
+                  minHeight: theme.hitTarget.min,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                },
+              ]}
+            >
+              <Plus size={16} color={theme.colors.text} />
+            </Pressable>
+          </View>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+              {t.menu.provisionalTotal}
+            </Text>
+            <PriceText
+              kurus={provisionalTotalKurus}
+              locale={language}
+              style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text }}
+            />
+          </View>
+        </View>
+
+        <Button
+          label={
+            !item.isAvailable
+              ? t.menu.soldOutHint
+              : !validation.valid
+                ? `${t.menu.selectRequiredPrompt}${
+                    validation.missingGroupName ? `: ${validation.missingGroupName}` : ''
+                  }`
+                : `${t.menu.addToCart} • ${formatTryFromKurus(provisionalTotalKurus, language)}`
+          }
+          fullWidth
+          disabled={!canAdd}
+          onPress={handleAddToCart}
+        />
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: 32 },
-  heroImg: { width: '100%', height: 220 },
-  content: { padding: 16, gap: 12 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 22, fontWeight: '700' },
-  favBtn: { padding: 8 },
-  price: { fontSize: 18 },
-  desc: { fontSize: 14, lineHeight: 20 },
-  allergensRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  sectionLabel: { fontSize: 13, fontWeight: '600' },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  groupCard: { gap: 8 },
-  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  groupTitle: { fontSize: 15, fontWeight: '700' },
-  groupReq: { fontSize: 12, fontWeight: '600' },
-  optRow: {
+  topBar: {
     flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  iconBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hero: {
+    width: '100%',
+    height: 220,
+  },
+  titlePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 12,
+  },
+  allergenWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  optionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 10,
   },
-  optName: { fontSize: 14, fontWeight: '500' },
-  noteBlock: { gap: 6 },
+  checkBox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   noteInput: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
-  qtyBtn: { width: 48, minHeight: 42 },
-  qtyText: { fontSize: 18, fontWeight: '700', minWidth: 28, textAlign: 'center' },
-  errText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  actions: { gap: 8, marginTop: 4 },
+  disclaimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footer: {
+    borderTopWidth: 1,
+  },
+  footerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  qtyGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  qtyBtn: {
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickNotesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickNoteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    gap: 6,
+    minHeight: 38,
+  },
+  quickCheck: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
-

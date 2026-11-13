@@ -7,14 +7,19 @@
 --              DO NOT execute against a live production database!
 -- ============================================================================
 
+\set ON_ERROR_STOP on
+
+BEGIN;
+
 DO $$
 BEGIN
+    IF current_setting('app.allow_seed', true) IS DISTINCT FROM 'true' THEN
+        RAISE EXCEPTION 'Refusing to run seed 007_seed.sql: app.allow_seed is not set to ''true''';
+    END IF;
     IF current_setting('app.node_env', true) = 'production' THEN
         RAISE EXCEPTION 'Refusing to run placeholder seed 007_seed.sql in production environment';
     END IF;
 END $$;
-
-BEGIN;
 
 -- ----------------------------------------------------------------------------
 -- 1. RESTAURANT SETTINGS SINGLETON
@@ -171,50 +176,50 @@ ON CONFLICT (category_id, language) DO NOTHING;
 -- ----------------------------------------------------------------------------
 INSERT INTO menu_items (id, category_id, price_kurus, vat_rate_percent, image_url, is_available, sort_order, allergens) VALUES
     -- 1. Zırh Kıyma Adana Kebap (340 TL)
-    ('f0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 34000, 1, '/images/adana.jpg', true, 1, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 72500, 1, '/images/adana.jpg', true, 1, '{gluten}'),
     -- 2. Urfa Kebap (340 TL)
-    ('f0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000001', 34000, 1, '/images/urfa.jpg', true, 2, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000001', 72500, 1, '/images/urfa.jpg', true, 2, '{gluten}'),
     -- 3. Beyti Sarma Kebap (420 TL)
-    ('f0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000001', 42000, 1, '/images/beyti.jpg', true, 3, '{gluten,dairy}'),
+    ('f0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000001', 83000, 1, '/images/beyti.jpg', true, 3, '{gluten,dairy}'),
     -- 4. Kuzu Çöp Şiş (440 TL)
-    ('f0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000001', 44000, 1, '/images/copsisi.jpg', true, 4, '{}'),
+    ('f0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000001', 90000, 1, '/images/copsisi.jpg', true, 4, '{}'),
     -- 5. Kuzu Ciğer Kebap (380 TL)
-    ('f0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000001', 38000, 1, '/images/kuzu_ciger.jpg', true, 5, '{}'),
+    ('f0000000-0000-0000-0000-000000000005', 'e0000000-0000-0000-0000-000000000001', 82500, 1, '/images/kuzu_ciger.jpg', true, 5, '{}'),
 
     -- Dürümler
     -- 6. Adana Dürüm (220 TL)
-    ('f0000000-0000-0000-0000-000000000006', 'e0000000-0000-0000-0000-000000000002', 22000, 1, '/images/adana_durum.jpg', true, 1, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000006', 'e0000000-0000-0000-0000-000000000002', 35000, 1, '/images/adana_durum.jpg', true, 1, '{gluten}'),
     -- 7. Urfa Dürüm (220 TL)
-    ('f0000000-0000-0000-0000-000000000007', 'e0000000-0000-0000-0000-000000000002', 22000, 1, '/images/urfa_durum.jpg', true, 2, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000007', 'e0000000-0000-0000-0000-000000000002', 35000, 1, '/images/urfa_durum.jpg', true, 2, '{gluten}'),
     -- 8. Tavuk Şiş Dürüm (190 TL)
-    ('f0000000-0000-0000-0000-000000000008', 'e0000000-0000-0000-0000-000000000002', 19000, 1, '/images/tavuk_sis_durum.jpg', true, 3, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000008', 'e0000000-0000-0000-0000-000000000002', 33000, 1, '/images/tavuk_sis_durum.jpg', true, 3, '{gluten}'),
 
     -- Pide & Lahmacun
     -- 9. Çıtır Lahmacun (90 TL)
-    ('f0000000-0000-0000-0000-000000000009', 'e0000000-0000-0000-0000-000000000003', 9000, 1, '/images/lahmacun_item.jpg', true, 1, '{gluten}'),
+    ('f0000000-0000-0000-0000-000000000009', 'e0000000-0000-0000-0000-000000000003', 21000, 1, '/images/lahmacun_item.jpg', true, 1, '{gluten}'),
     -- 10. Kaşarlı Pide (260 TL)
-    ('f0000000-0000-0000-0000-000000000010', 'e0000000-0000-0000-0000-000000000003', 26000, 1, '/images/kasarli_pide.jpg', true, 2, '{gluten,dairy}'),
+    ('f0000000-0000-0000-0000-000000000010', 'e0000000-0000-0000-0000-000000000003', 41000, 1, '/images/kasarli_pide.jpg', true, 2, '{gluten,dairy}'),
     -- 11. Kuşbaşılı Kaşarlı Pide (310 TL)
-    ('f0000000-0000-0000-0000-000000000011', 'e0000000-0000-0000-0000-000000000003', 31000, 1, '/images/kusbasili_kasarli_pide.jpg', true, 3, '{gluten,dairy}'),
+    ('f0000000-0000-0000-0000-000000000011', 'e0000000-0000-0000-0000-000000000003', 50000, 1, '/images/kusbasili_kasarli_pide.jpg', true, 3, '{gluten,dairy}'),
 
     -- Kahvaltı
     -- 12. Serpme Kahvaltı 2 Kişilik (900 TL)
-    ('f0000000-0000-0000-0000-000000000012', 'e0000000-0000-0000-0000-000000000004', 90000, 1, '/images/serpme_kahvalti.jpg', true, 1, '{gluten,dairy,eggs,nuts}'),
+    ('f0000000-0000-0000-0000-000000000012', 'e0000000-0000-0000-0000-000000000004', 130000, 1, '/images/serpme_kahvalti.jpg', true, 1, '{gluten,dairy,eggs,nuts}'),
     -- 13. Menemen (250 TL)
-    ('f0000000-0000-0000-0000-000000000013', 'e0000000-0000-0000-0000-000000000004', 25000, 1, '/images/menemen.jpg', true, 2, '{dairy,eggs}'),
+    ('f0000000-0000-0000-0000-000000000013', 'e0000000-0000-0000-0000-000000000004', 30000, 1, '/images/menemen.jpg', true, 2, '{dairy,eggs}'),
 
     -- Mezeler
     -- 14. Geleneksel Humus (140 TL)
-    ('f0000000-0000-0000-0000-000000000014', 'e0000000-0000-0000-0000-000000000005', 14000, 1, '/images/humus.webp', true, 1, '{sesame}'),
+    ('f0000000-0000-0000-0000-000000000014', 'e0000000-0000-0000-0000-000000000005', 18000, 1, '/images/humus.webp', true, 1, '{sesame}'),
     -- 15. Çoban Salata (110 TL)
-    ('f0000000-0000-0000-0000-000000000015', 'e0000000-0000-0000-0000-000000000005', 11000, 1, '/images/coban_salata.jpg', true, 2, '{}'),
+    ('f0000000-0000-0000-0000-000000000015', 'e0000000-0000-0000-0000-000000000005', 20000, 1, '/images/coban_salata.jpg', true, 2, '{}'),
 
     -- Tatlı & İçecek
     -- 16. Hatay Künefe (180 TL)
-    ('f0000000-0000-0000-0000-000000000016', 'e0000000-0000-0000-0000-000000000006', 18000, 1, '/images/kunefe.jpg', true, 1, '{gluten,dairy,nuts}'),
+    ('f0000000-0000-0000-0000-000000000016', 'e0000000-0000-0000-0000-000000000006', 25000, 1, '/images/kunefe.jpg', true, 1, '{gluten,dairy,nuts}'),
     -- 17. Köy Ayranı (40 TL)
-    ('f0000000-0000-0000-0000-000000000017', 'e0000000-0000-0000-0000-000000000006', 4000, 1, '/images/ayran.jpg', true, 2, '{dairy}')
-ON CONFLICT (id) DO NOTHING;
+    ('f0000000-0000-0000-0000-000000000017', 'e0000000-0000-0000-0000-000000000006', 8500, 1, '/images/ayran.jpg', true, 2, '{dairy}')
+ON CONFLICT (id) DO UPDATE SET price_kurus = EXCLUDED.price_kurus, is_available = true, deleted_at = NULL;
 
 -- Multi-language Translations
 INSERT INTO menu_item_translations (menu_item_id, language, name, description) VALUES

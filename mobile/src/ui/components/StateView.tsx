@@ -1,73 +1,120 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useTranslations } from '../../i18n';
+import { StyleSheet, Text, View } from 'react-native';
+import {
+  AlertTriangle,
+  Clock,
+  Inbox,
+  PauseCircle,
+  RefreshCw,
+  ShieldAlert,
+  WifiOff,
+} from 'lucide-react-native';
 import { useTheme } from '../themes/ThemeProvider';
 import { Button } from './Button';
+import { MenuCardSkeleton } from './Skeleton';
 
-export type ViewStateKind = 'loading' | 'empty' | 'error' | 'offline' | 'closed' | 'paused';
+export type StateKind =
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'closed'
+  | 'paused'
+  | 'update';
 
 export function StateView({
   kind,
-  title,
+  title = '',
   message,
-  onRetry,
   actionLabel,
   onAction,
+  onRetry,
 }: {
-  kind: ViewStateKind;
+  kind: StateKind;
   title?: string;
   message?: string;
-  onRetry?: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  onRetry?: () => void;
 }) {
-  const theme = useTheme();
-  const { t } = useTranslations();
+  const { colors, spacing, typography, radii } = useTheme();
+  const resolvedAction = onAction ?? onRetry;
 
   if (kind === 'loading') {
     return (
-      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.desc, { color: theme.colors.textSecondary }]}>
-          {title ?? t.common.loading}
+      <View style={[styles.skeletonWrap, { padding: spacing.md, gap: spacing.sm }]}>
+        <MenuCardSkeleton />
+        <MenuCardSkeleton />
+        <MenuCardSkeleton />
+        <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>
+          {title}
         </Text>
       </View>
     );
   }
 
-  const defaultTitle =
-    kind === 'offline'
-      ? t.common.offlineTitle
-      : kind === 'closed'
-        ? t.common.closedTitle
-        : kind === 'paused'
-          ? t.common.pausedTitle
-          : kind === 'error'
-            ? t.common.errorTitle
-            : '';
+  const iconColor =
+    kind === 'error' || kind === 'offline' || kind === 'closed'
+      ? colors.error
+      : kind === 'paused' || kind === 'update'
+        ? colors.accent
+        : colors.primary;
 
-  const defaultDesc = kind === 'offline' ? t.common.offlineDesc : undefined;
+  const iconBg =
+    kind === 'error' || kind === 'offline' || kind === 'closed'
+      ? colors.errorSoft
+      : kind === 'paused' || kind === 'update'
+        ? colors.accentSoft
+        : colors.primarySoft;
+
+  const Icon =
+    kind === 'offline'
+      ? WifiOff
+      : kind === 'closed'
+        ? Clock
+        : kind === 'paused'
+          ? PauseCircle
+          : kind === 'update'
+            ? ShieldAlert
+            : kind === 'error'
+              ? AlertTriangle
+              : Inbox;
 
   return (
-    <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
-      <Text
+    <View style={[styles.center, { padding: spacing.lg, gap: spacing.sm }]}>
+      <View
         style={[
-          styles.title,
-          { color: kind === 'error' ? theme.colors.error : theme.colors.text },
+          styles.iconCircle,
+          {
+            backgroundColor: iconBg,
+            borderRadius: radii.full,
+          },
         ]}
       >
-        {title ?? defaultTitle}
+        <Icon size={26} color={iconColor} />
+      </View>
+      <Text style={[typography.titleSm, { color: colors.text, textAlign: 'center' }]}>
+        {title}
       </Text>
-      {message ?? defaultDesc ? (
-        <Text style={[styles.desc, { color: theme.colors.textSecondary }]}>
-          {message ?? defaultDesc}
+      {message ? (
+        <Text
+          style={[
+            typography.bodySm,
+            { color: colors.textSecondary, textAlign: 'center', maxWidth: 320 },
+          ]}
+        >
+          {message}
         </Text>
       ) : null}
-      {onRetry ? (
-        <Button title={t.common.retry} onPress={onRetry} style={styles.btn} />
-      ) : null}
-      {onAction && actionLabel ? (
-        <Button title={actionLabel} onPress={onAction} variant="secondary" style={styles.btn} />
+      {resolvedAction ? (
+        <Button
+          label={actionLabel ?? 'Tekrar Dene'}
+          onPress={resolvedAction}
+          variant="primary"
+          size="sm"
+          icon={kind === 'error' || kind === 'offline' ? <RefreshCw size={15} color={colors.primaryText} /> : undefined}
+          style={{ marginTop: spacing.xs }}
+        />
       ) : null}
     </View>
   );
@@ -78,22 +125,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 10,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
+  skeletonWrap: {
+    flex: 1,
   },
-  desc: {
-    fontSize: 14,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  btn: {
-    marginTop: 8,
-    minWidth: 160,
+  iconCircle: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-

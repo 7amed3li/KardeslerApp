@@ -7,6 +7,7 @@ import type { HttpAuthHooks } from '../auth-hooks.js';
 import {
   AssignDriverSchema,
   HeartbeatSchema,
+  OrderSearchQuerySchema,
   PauseOrdersSchema,
   PrintAckSchema,
   StaffOrderStatusSchema,
@@ -19,12 +20,15 @@ function registerStaffOrderOpsRoutes(app: FastifyInstance, orders: OrdersUseCase
     const staff = await hooks.requireStaff(req, ['staff', 'owner']);
     return reply.status(200).send(await orders.listStaffOrders(staff.sub, staff.role));
   });
+  r.get('/api/v1/staff/orders/search', { schema: { querystring: OrderSearchQuerySchema } }, async (req, reply) => {
+    const staff = await hooks.requireStaff(req, ['staff', 'owner']);
+    return reply.status(200).send(await orders.searchStaffOrders(staff.sub, staff.role, req.query.query));
+  });
   const statusHandler = async (req: { params: { id: string }; body: any } & any, reply: any) => {
     const staff = await hooks.requireStaff(req, ['staff', 'owner']);
     return reply.status(200).send(await orders.transitionOrderAsStaff(staff.sub, staff.role, req.params.id, req.body.status, req.body.cancel_reason));
   };
   r.post('/api/v1/staff/orders/:id/status', { schema: { params: UuidParamSchema, body: StaffOrderStatusSchema } }, statusHandler);
-  r.patch('/api/v1/orders/:id/status', { schema: { params: UuidParamSchema, body: StaffOrderStatusSchema } }, statusHandler);
   r.post('/api/v1/staff/orders/:id/driver', { schema: { params: UuidParamSchema, body: AssignDriverSchema } }, async (req, reply) => {
     const staff = await hooks.requireStaff(req, ['staff', 'owner']);
     return reply.status(200).send(await orders.assignDriver(staff.sub, staff.role, req.params.id, req.body.driverId));
@@ -41,6 +45,10 @@ function registerStaffOrderOpsRoutes(app: FastifyInstance, orders: OrdersUseCase
 
 function registerPrintAndRealtimeRoutes(app: FastifyInstance, printRt: PrintAndRealtimeUseCases, hooks: HttpAuthHooks): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
+  app.post('/api/v1/staff/realtime/ticket', async (req, reply) => {
+    const staff = await hooks.requireStaff(req, ['staff', 'owner']);
+    return reply.status(200).send(await printRt.issueRealtimeTicket(staff.sub, staff.role));
+  });
   app.get('/api/v1/realtime/staff', async (req, reply) => {
     await hooks.requireStaff(req, ['staff', 'owner']);
     const raw = req.headers['last-event-id'];

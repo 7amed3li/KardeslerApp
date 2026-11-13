@@ -1,6 +1,7 @@
 import { DomainError } from '../../domain/errors.js';
 import { ThermalTicketDomain } from '../../domain/print/thermal-ticket.domain.js';
 import type { Clock } from '../../ports/clock.js';
+import type { TokenServicePort } from '../../ports/providers.js';
 import type { PrintRepository, SettingsRepository } from '../../ports/repositories.js';
 import type { EventBusPort, RealtimeEvent } from '../../ports/state.js';
 
@@ -10,6 +11,7 @@ export class PrintAndRealtimeUseCases {
     private readonly settingsRepo: SettingsRepository,
     private readonly eventBus: EventBusPort,
     private readonly clock: Clock,
+    private readonly tokens?: TokenServicePort,
   ) {}
 
   async pollPendingJobs(deviceId: string) {
@@ -74,6 +76,12 @@ export class PrintAndRealtimeUseCases {
 
   async subscribeStaffEvents(listener: (evt: RealtimeEvent) => void, lastEventId?: number) {
     return this.eventBus.subscribe(listener, lastEventId);
+  }
+
+  async issueRealtimeTicket(staffId: string, role: 'staff' | 'owner') {
+    if (!this.tokens) throw new DomainError('INTERNAL_ERROR', 500, 'Token servisi yapılandırılmamış');
+    const ticket = await this.tokens.signStaffSseTicket(staffId, role);
+    return { ticket, expiresInSeconds: 60 };
   }
 }
 

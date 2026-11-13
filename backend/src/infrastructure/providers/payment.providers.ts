@@ -32,6 +32,16 @@ export class FakePaymentProvider implements PaymentProvider {
   }
 
   verifyWebhook(payload: PaymentWebhookInput): boolean {
+    if (payload.signatureHeader && payload.rawBody) {
+      const computed = crypto
+        .createHmac('sha256', this.webhookSecret)
+        .update(payload.rawBody, 'utf8')
+        .digest('hex');
+      const a = Buffer.from(payload.signatureHeader, 'hex');
+      const b = Buffer.from(computed, 'hex');
+      if (a.length !== b.length) return false;
+      return crypto.timingSafeEqual(a, b);
+    }
     const expected = computeWebhookHmac(
       payload.providerEventId,
       payload.orderId,

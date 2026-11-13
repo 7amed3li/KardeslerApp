@@ -32,16 +32,90 @@ export async function verifyCustomerOtp(phone: string, code: string): Promise<Ve
   return result;
 }
 
+export interface GoogleExchangePayload {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+  clientId: string;
+  nonce: string;
+}
+
+export interface GoogleExchangeResult {
+  accessToken: string;
+  refreshToken: string;
+  isNewUser: boolean;
+  user: UserProfileDto;
+}
+
+export async function exchangeGoogleCode(payload: GoogleExchangePayload): Promise<GoogleExchangeResult> {
+  const result = await unwrapApiResponse<GoogleExchangeResult>(
+    apiClient.POST('/api/v1/auth/customer/google/exchange', {
+      body: payload,
+    }) as Promise<{ data?: GoogleExchangeResult; error?: unknown; response: Response }>,
+  );
+
+  sessionTokenStore.setAccessToken(result.accessToken);
+  await secureStorage.setRefreshToken(result.refreshToken);
+  useAuthStore.getState().setAuthenticated(result.user);
+  return result;
+}
+
+export async function linkGoogleIdentity(
+  payload: GoogleExchangePayload,
+): Promise<{ linked: boolean; provider: 'google'; email: string | null }> {
+  return unwrapApiResponse<{ linked: boolean; provider: 'google'; email: string | null }>(
+    apiClient.POST('/api/v1/auth/customer/google/link', {
+      body: payload,
+    }) as Promise<{
+      data?: { linked: boolean; provider: 'google'; email: string | null };
+      error?: unknown;
+      response: Response;
+    }>,
+  );
+}
+
+export interface CustomerIdentityDto {
+  provider: string;
+  emailAtLink: string | null;
+  createdAt: string;
+}
+
+export async function listCustomerIdentities(): Promise<{ identities: CustomerIdentityDto[] }> {
+  return unwrapApiResponse<{ identities: CustomerIdentityDto[] }>(
+    apiClient.GET('/api/v1/auth/customer/identities') as Promise<{
+      data?: { identities: CustomerIdentityDto[] };
+      error?: unknown;
+      response: Response;
+    }>,
+  );
+}
+
+export async function unlinkCustomerIdentity(
+  provider: 'google',
+): Promise<{ unlinked: boolean; provider: string }> {
+  return unwrapApiResponse<{ unlinked: boolean; provider: string }>(
+    apiClient.DELETE('/api/v1/auth/customer/identities/{provider}', {
+      params: { path: { provider } },
+    }) as Promise<{
+      data?: { unlinked: boolean; provider: string };
+      error?: unknown;
+      response: Response;
+    }>,
+  );
+}
+
 export async function updateMyProfile(input: {
   name?: string;
   email?: string | null;
+  phone?: string | null;
   preferredLanguage?: SupportedLanguage;
 }): Promise<UserProfileDto> {
-  const updated = await unwrapApiResponse<UserProfileDto>(
+  const res = await unwrapApiResponse<{ user?: UserProfileDto } & Partial<UserProfileDto>>(
     apiClient.PATCH('/api/v1/users/me', {
       body: input,
-    }) as Promise<{ data?: UserProfileDto; error?: unknown; response: Response }>,
+    }) as Promise<{ data?: { user?: UserProfileDto } & Partial<UserProfileDto>; error?: unknown; response: Response }>,
   );
+  const updated = (res.user ?? res) as UserProfileDto;
   useAuthStore.getState().updateUser(updated);
   return updated;
 }

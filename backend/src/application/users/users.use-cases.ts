@@ -13,7 +13,10 @@ export class UsersAndAddressesUseCases {
     return { anonymized: true, message: 'Hesabınız ve kişisel verileriniz KVKK kapsamında anonimleştirildi' };
   }
 
-  async updateMe(userId: string, input: { name?: string; email?: string | null; preferredLanguage?: SupportedLanguage }) {
+  async updateMe(
+    userId: string,
+    input: { name?: string; email?: string | null; phone?: string | null; preferredLanguage?: SupportedLanguage },
+  ) {
     return this.usersRepo.updateCustomerProfile(userId, input);
   }
 

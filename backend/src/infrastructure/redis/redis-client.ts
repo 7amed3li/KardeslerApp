@@ -3,7 +3,7 @@ import { Redis } from 'ioredis';
 export function createRedisConnection(
   redisUrl: string,
   keyPrefix = 'kardesler:',
-  failFastWhenOffline = false,
+  failFastWhenOffline = true,
 ): Redis {
   const client = new Redis(redisUrl, {
     keyPrefix,

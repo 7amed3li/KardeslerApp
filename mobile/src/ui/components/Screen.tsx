@@ -1,30 +1,28 @@
 import React from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { useTheme } from '../themes/ThemeProvider';
 
 export function Screen({
   children,
+  edges = ['top', 'left', 'right'],
   style,
-  edges = ['bottom'],
 }: {
   children: React.ReactNode;
+  edges?: Edge[];
   style?: StyleProp<ViewStyle>;
-  edges?: ('top' | 'bottom' | 'left' | 'right')[];
 }) {
-  const theme = useTheme();
+  const { colors } = useTheme();
   return (
     <SafeAreaView
       edges={edges}
-      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: colors.background }, style]}
     >
-      <View style={[styles.container, style]}>{children}</View>
+      {children}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   container: { flex: 1 },
 });
-

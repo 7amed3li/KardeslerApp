@@ -1,407 +1,708 @@
 import type { SupportedLanguage } from '@kardesler/shared';
 import { useQuery } from '@tanstack/react-query';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { Heart, MapPin, Search } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
 import {
-  FlatList,
+  Bell,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Plus,
+  RotateCcw,
+  Search,
+} from 'lucide-react-native';
+import React, { useMemo } from 'react';
+import {
+  I18nManager,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { queryKeys } from '../../src/api/query-keys';
-import { RESTAURANT_CONFIG } from '../../src/config/restaurant';
+import type { MenuItemDto } from '../../src/api/types';
+import { useAuthStore } from '../../src/features/auth/model/auth.store';
 import { useCartStore } from '../../src/features/cart/model/cart.store';
 import {
-  checkDeliveryCoverage,
+  fetchBanners,
   fetchMenu,
   fetchPublicSettings,
 } from '../../src/features/menu/api/menu.api';
-import { filterMenuItems } from '../../src/features/menu/model/menu.model';
+import { listMyOrders } from '../../src/features/orders/api/orders.api';
 import { useTranslations } from '../../src/i18n';
-import { formatKurus } from '../../src/lib/money/format';
-import { BRAND_IMAGES, resolveDishImage } from '../../src/ui/assets/dishImages';
-import { Card, PriceText, Screen, StateView } from '../../src/ui/components';
+import {
+  BRAND_IMAGES,
+  resolveDishImage,
+  resolveOptionalDishImage,
+} from '../../src/ui/assets/dishImages';
+import {
+  Badge,
+  Button,
+  Card,
+  PriceText,
+  Screen,
+  SkeletonBox,
+  StateView,
+  StoriesShowcase,
+  type StoryHighlight,
+} from '../../src/ui/components';
 import { useTheme } from '../../src/ui/themes/ThemeProvider';
 
-export default function HomeMenuScreen() {
+const LANGS: { code: SupportedLanguage; label: string }[] = [
+  { code: 'tr', label: 'TR' },
+  { code: 'en', label: 'EN' },
+  { code: 'ar', label: 'AR' },
+];
+
+export default function HomeTabScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { language, setLanguage, t } = useTranslations();
 
-  const orderType = useCartStore((s) => s.orderType);
-  const setOrderType = useCartStore((s) => s.setOrderType);
-  const favoriteIds = useCartStore((s) => s.favoriteIds);
-  const deliveryCoords = useCartStore((s) => s.deliveryCoords);
-  const setDeliveryCoords = useCartStore((s) => s.setDeliveryCoords);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const addItem = useCartStore((s) => s.addItem);
+  const deliveryAddressText = useCartStore((s) => s.deliveryAddressText);
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [zoneStatusText, setZoneStatusText] = useState<string | null>(null);
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.publicSettings,
+    queryFn: fetchPublicSettings,
+    staleTime: 60_000,
+  });
 
   const menuQuery = useQuery({
     queryKey: queryKeys.menu(language),
     queryFn: () => fetchMenu(language),
   });
 
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.publicSettings,
-    queryFn: fetchPublicSettings,
+  const bannersQuery = useQuery({
+    queryKey: queryKeys.banners,
+    queryFn: fetchBanners,
+    staleTime: 120_000,
   });
 
-  const filteredItems = useMemo(
-    () =>
-      filterMenuItems({
-        items: menuQuery.data?.items ?? [],
-        categoryId: selectedCategoryId,
-        searchQuery,
-        favoritesOnly,
-        favoriteIds,
-      }),
-    [menuQuery.data?.items, selectedCategoryId, searchQuery, favoritesOnly, favoriteIds],
+  const ordersQuery = useQuery({
+    queryKey: queryKeys.orders,
+    queryFn: listMyOrders,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  const allItems = useMemo(() => menuQuery.data?.items ?? [], [menuQuery.data]);
+  const featuredItems = useMemo(
+    () => allItems.filter((i) => i.isAvailable).slice(0, 8),
+    [allItems],
+  );
+  const categories = useMemo(() => menuQuery.data?.categories ?? [], [menuQuery.data]);
+  const activeBanner = bannersQuery.data?.banners?.[0] ?? null;
+  const recentOrder = ordersQuery.data?.orders?.[0] ?? null;
+
+  const categoryCards = useMemo(() => {
+    return categories.map((cat) => {
+      const catItemWithImg = allItems.find((i) => i.categoryId === cat.id && i.imageUrl);
+      const image = catItemWithImg
+        ? resolveDishImage(catItemWithImg.name, catItemWithImg.imageUrl)
+        : BRAND_IMAGES.heroBg;
+      return { ...cat, image };
+    });
+  }, [allItems, categories]);
+
+  const stories: StoryHighlight[] = useMemo(
+    () => [
+      {
+        id: 'wood-fire',
+        title: t.home.storyWoodFire,
+        subtitle: t.home.storyWoodFireSub,
+        image: resolveDishImage('Adana Kebap', '/images/adana.webp'),
+        categoryKeyword: 'kebap',
+      },
+      {
+        id: 'breakfast',
+        title: t.home.storyBreakfast,
+        subtitle: t.home.storyBreakfastSub,
+        image: resolveDishImage('Serpme Kahvaltı', '/images/Serpme-Kahvalti-2-Kisilik.webp'),
+        categoryKeyword: 'kahvalt',
+      },
+      {
+        id: 'stone-oven',
+        title: t.home.storyStoneOven,
+        subtitle: t.home.storyStoneOvenSub,
+        image: resolveDishImage('Lahmacun', '/images/lahmacun.webp'),
+        categoryKeyword: 'lahmacun',
+      },
+      {
+        id: 'dessert',
+        title: t.home.storyDessert,
+        subtitle: t.home.storyDessertSub,
+        image: resolveDishImage('Trileçe', '/images/trilece.webp'),
+        categoryKeyword: 'tatl',
+      },
+      {
+        id: 'daily-special',
+        title: t.home.featured,
+        subtitle: t.home.craftSub,
+        image: resolveDishImage('Karışık Kebap', '/images/27-Karisik-Kebap_1.webp'),
+      },
+    ],
+    [t],
   );
 
-  const handleCheckZone = async () => {
-    try {
-      let coords = deliveryCoords;
-      if (!coords) {
-        const perm = await Location.requestForegroundPermissionsAsync();
-        if (perm.status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({});
-          coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        } else {
-          coords = {
-            lat: RESTAURANT_CONFIG.defaultCoords.latitude,
-            lng: RESTAURANT_CONFIG.defaultCoords.longitude,
-          };
-        }
-        setDeliveryCoords(coords);
-      }
-      const res = await checkDeliveryCoverage(coords.lat, coords.lng);
-      if (res.covered && res.zone) {
-        setZoneStatusText(
-          `${res.zone.name} • ${t.menu.minOrder}: ${formatKurus(res.zone.minOrderKurus)}`,
-        );
-      } else {
-        setZoneStatusText(t.menu.outOfZone);
-      }
-    } catch {
-      setZoneStatusText(t.common.errorTitle);
-    }
+  const settings = settingsQuery.data;
+  const statusTone = !settings
+    ? 'neutral'
+    : settings.orderingAvailable
+      ? 'success'
+      : settings.isAcceptingOrders
+        ? 'accent'
+        : 'error';
+  const statusLabel = !settings
+    ? t.common.loading
+    : settings.orderingAvailable
+      ? t.common.open
+      : settings.isAcceptingOrders
+        ? t.common.paused
+        : t.common.closed;
+
+  const handleLocationPress = () => {
+    router.push('/addresses');
   };
 
-  if (menuQuery.isLoading) {
-    return <StateView kind="loading" />;
-  }
+  const handleQuickAdd = (item: MenuItemDto) => {
+    const hasRequired = item.options.some((o) => o.isRequired);
+    if (hasRequired) {
+      router.push({ pathname: '/menu/[id]', params: { id: item.id } });
+      return;
+    }
+    addItem({
+      menuItemId: item.id,
+      name: item.name,
+      imageUrl: item.imageUrl,
+      quantity: 1,
+      optionIds: [],
+      optionNames: [],
+    });
+  };
 
-  if (menuQuery.isError) {
-    return (
-      <StateView
-        kind="error"
-        message={menuQuery.error instanceof Error ? menuQuery.error.message : t.common.errorTitle}
-        onRetry={() => void menuQuery.refetch()}
-      />
-    );
-  }
-
-  const settings = settingsQuery.data;
-  const categories = menuQuery.data?.categories ?? [];
+  const ArrowIcon = I18nManager.isRTL ? ChevronLeft : ChevronRight;
 
   return (
-    <Screen>
-      <View
-        style={[
-          styles.hero,
-          { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
-        ]}
+    <Screen edges={['top']}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: theme.spacing.md,
+          paddingTop: theme.spacing.sm,
+          paddingBottom: theme.spacing.xxl,
+          gap: theme.spacing.md,
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        <Image source={BRAND_IMAGES.logo} style={styles.logo} resizeMode="contain" />
-        <View style={styles.heroText}>
-          <Text style={[styles.heroTitle, { color: theme.colors.text }]}>{t.appName}</Text>
-          <Text style={[styles.heroSub, { color: theme.colors.textSecondary }]}>
-            {settings?.address ?? RESTAURANT_CONFIG.fallbackAddress}
-          </Text>
-        </View>
-        <View style={styles.langRow}>
-          {(['tr', 'en', 'ar'] as SupportedLanguage[]).map((lang) => (
-            <Pressable
-              key={lang}
-              onPress={() => setLanguage(lang)}
-              style={[
-                styles.langChip,
-                {
-                  backgroundColor:
-                    language === lang ? theme.colors.primary : theme.colors.surfaceElevated,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '700',
-                  color: language === lang ? theme.colors.primaryText : theme.colors.text,
-                }}
-              >
-                {lang.toUpperCase()}
+        {/* Top Header: Circular Logo + Restaurant Name + Location Pill + Bell/Language */}
+        <View style={styles.topHeader}>
+          <View style={styles.brandRow}>
+            <Image source={BRAND_IMAGES.logo} style={styles.logo} resizeMode="cover" />
+            <View style={{ gap: 4 }}>
+              <Text style={[theme.typography.titleMd, { color: theme.colors.text }]}>
+                {t.appName}
               </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+              <Pressable
+                onPress={handleLocationPress}
+                accessibilityRole="button"
+                style={[
+                  styles.locationPill,
+                  {
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderColor: theme.colors.border,
+                    borderRadius: theme.radii.full,
+                  },
+                ]}
+              >
+                <MapPin size={13} color={theme.colors.primary} />
+                <Text
+                  style={[theme.typography.caption, { color: theme.colors.text, fontWeight: '600' }]}
+                  numberOfLines={1}
+                >
+                  {deliveryAddressText ?? 'Beyoğlu, İstanbul'}
+                </Text>
+                <ChevronDown size={13} color={theme.colors.textSecondary} />
+              </Pressable>
+            </View>
+          </View>
 
-      {settings && !settings.isAcceptingOrders ? (
-        <View style={[styles.statusBanner, { backgroundColor: theme.colors.error }]}>
-          <Text style={styles.statusBannerText}>{t.common.pausedTitle}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.controls}>
-        <View style={styles.modeRow}>
-          {(['delivery', 'pickup'] as const).map((mode) => (
+          <View style={styles.headerActions}>
             <Pressable
-              key={mode}
-              onPress={() => setOrderType(mode)}
+              onPress={() => router.push('/(tabs)/orders')}
+              accessibilityRole="button"
+              accessibilityLabel={t.tabs.orders}
               style={[
-                styles.modeBtn,
+                styles.bellBtn,
                 {
-                  backgroundColor:
-                    orderType === mode ? theme.colors.primary : theme.colors.surface,
+                  backgroundColor: theme.colors.surfaceElevated,
                   borderColor: theme.colors.border,
                 },
               ]}
             >
-              <Text
-                style={{
-                  fontWeight: '600',
-                  fontSize: 13,
-                  color: orderType === mode ? theme.colors.primaryText : theme.colors.text,
-                }}
-              >
-                {mode === 'delivery' ? t.menu.delivery : t.menu.pickup}
-              </Text>
+              <Bell size={18} color={theme.colors.text} />
             </Pressable>
-          ))}
-          <Pressable
-            onPress={() => void handleCheckZone()}
-            style={[
-              styles.zoneBtn,
-              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-            ]}
-          >
-            <MapPin size={15} color={theme.colors.accent} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text }}>
-              {t.menu.checkZone}
-            </Text>
-          </Pressable>
+          </View>
         </View>
 
-        {zoneStatusText ? (
-          <Text style={[styles.zoneNote, { color: theme.colors.primary }]}>{zoneStatusText}</Text>
-        ) : null}
-
-        <View style={styles.searchRow}>
+        {/* Compact Status & Language Row */}
+        <View style={styles.metaBar}>
+          <Badge label={statusLabel} tone={statusTone} />
           <View
             style={[
-              styles.searchBox,
-              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-            ]}
-          >
-            <Search size={16} color={theme.colors.textMuted} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder={t.menu.searchPlaceholder}
-              placeholderTextColor={theme.colors.textMuted}
-              style={[styles.searchInput, { color: theme.colors.text }]}
-            />
-          </View>
-          <Pressable
-            onPress={() => setFavoritesOnly((v) => !v)}
-            style={[
-              styles.favFilterBtn,
+              styles.langGroup,
               {
-                backgroundColor: favoritesOnly ? theme.colors.primary : theme.colors.surface,
+                backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
+                borderRadius: theme.radii.full,
               },
             ]}
           >
-            <Heart
-              size={16}
-              color={favoritesOnly ? theme.colors.primaryText : theme.colors.error}
-              fill={favoritesOnly ? theme.colors.primaryText : 'transparent'}
-            />
+            {LANGS.map((l) => {
+              const active = l.code === language;
+              return (
+                <Pressable
+                  key={l.code}
+                  onPress={() => void setLanguage(l.code)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.langPill,
+                    {
+                      backgroundColor: active ? theme.colors.primary : 'transparent',
+                      borderRadius: theme.radii.full,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      theme.typography.caption,
+                      {
+                        color: active ? theme.colors.primaryText : theme.colors.textSecondary,
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {l.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Pill Search Bar -> Opens Dedicated Menu Tab */}
+        <Pressable
+          onPress={() => router.push('/(tabs)/menu')}
+          accessibilityRole="search"
+          accessibilityLabel={t.menu.searchPlaceholder}
+          style={({ pressed }) => [
+            styles.searchPill,
+            {
+              backgroundColor: pressed ? theme.colors.surface : theme.colors.surfaceElevated,
+              borderColor: theme.colors.border,
+              borderRadius: theme.radii.full,
+            },
+          ]}
+        >
+          <Search size={18} color={theme.colors.textMuted} />
+          <Text
+            style={[theme.typography.bodySm, { color: theme.colors.textMuted, flex: 1 }]}
+            numberOfLines={1}
+          >
+            {t.menu.searchPlaceholder}
+          </Text>
+        </Pressable>
+
+        {/* Story Highlights Strip */}
+        <StoriesShowcase
+          sectionTitle=""
+          stories={stories}
+          ctaLabel={t.home.seeInMenu}
+          closeLabel={t.home.closeStory}
+          onSelectStoryCta={(story) => {
+            const matched = story.categoryKeyword
+              ? categories.find((c) =>
+                  c.name.toLocaleLowerCase('tr-TR').includes(story.categoryKeyword!),
+                )
+              : undefined;
+            if (matched) {
+              router.push({ pathname: '/(tabs)/menu', params: { categoryId: matched.id } });
+            } else {
+              router.push('/(tabs)/menu');
+            }
+          }}
+        />
+
+        {/* Hero Offer / Campaign Banner ("Bugün Kardeşler'de") */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <View style={styles.sectionHeader}>
+            <Text style={[theme.typography.titleMd, { color: theme.colors.text }]}>
+              {t.home.campaignLabel}
+            </Text>
+            <Pressable
+              onPress={() => router.push('/(tabs)/menu')}
+              style={styles.seeAllRow}
+            >
+              <Text style={[theme.typography.label, { color: theme.colors.primary }]}>
+                {t.common.all}
+              </Text>
+              <ArrowIcon size={15} color={theme.colors.primary} />
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={() => router.push('/(tabs)/menu')}
+            accessibilityRole="button"
+            style={[
+              styles.heroCard,
+              {
+                borderRadius: theme.radii.lg,
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+          >
+            <Image source={BRAND_IMAGES.heroBg} style={styles.heroImage} resizeMode="cover" />
+            <View style={styles.heroScrim}>
+              <Text style={[theme.typography.titleLg, { color: '#FFFFFF' }]}>
+                {activeBanner?.titleTranslations?.[language] ??
+                  activeBanner?.titleTranslations?.tr ??
+                  t.home.campaignFallbackTitle}
+              </Text>
+              <Text style={[theme.typography.bodySm, { color: 'rgba(255,255,255,0.9)' }]}>
+                {t.home.campaignFallbackSub}
+              </Text>
+              <View style={styles.heroPill}>
+                <Text style={[theme.typography.label, { color: theme.colors.primary }]}>
+                  {t.home.openMenu}
+                </Text>
+              </View>
+            </View>
           </Pressable>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catScroll}
-        >
-          <Pressable
-            onPress={() => setSelectedCategoryId(null)}
-            style={[
-              styles.catChip,
-              {
-                backgroundColor:
-                  selectedCategoryId === null ? theme.colors.primary : theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '600',
-                color: selectedCategoryId === null ? theme.colors.primaryText : theme.colors.text,
-              }}
-            >
-              {t.common.all}
-            </Text>
-          </Pressable>
-          {categories.map((cat) => {
-            const active = selectedCategoryId === cat.id;
-            return (
+        {/* Categories Horizontal Photo Cards */}
+        {categoryCards.length > 0 ? (
+          <View style={{ gap: theme.spacing.xs }}>
+            <View style={styles.sectionHeader}>
+              <Text style={[theme.typography.titleMd, { color: theme.colors.text }]}>
+                {t.home.categories}
+              </Text>
               <Pressable
-                key={cat.id}
-                onPress={() => setSelectedCategoryId(cat.id)}
-                style={[
-                  styles.catChip,
-                  {
-                    backgroundColor: active ? theme.colors.primary : theme.colors.surface,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
+                onPress={() => router.push('/(tabs)/menu')}
+                style={styles.seeAllRow}
               >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: active ? theme.colors.primaryText : theme.colors.text,
-                  }}
-                >
-                  {cat.name}
+                <Text style={[theme.typography.label, { color: theme.colors.primary }]}>
+                  {t.common.all}
                 </Text>
+                <ArrowIcon size={15} color={theme.colors.primary} />
               </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+            </View>
 
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={<StateView kind="empty" title={t.menu.emptySearch} />}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => router.push(`/menu/${item.id}`)}>
-            <Card style={styles.card}>
-              <View style={styles.row}>
-                <Image
-                  source={resolveDishImage(item.name, item.imageUrl)}
-                  style={styles.dishImg}
-                  resizeMode="cover"
-                />
-                <View style={styles.info}>
-                  <Text style={[styles.name, { color: theme.colors.text }]}>{item.name}</Text>
-                  {item.description ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: theme.spacing.xs }}
+            >
+              {categoryCards.map((cat) => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() =>
+                    router.push({ pathname: '/(tabs)/menu', params: { categoryId: cat.id } })
+                  }
+                  accessibilityRole="button"
+                  style={[
+                    styles.catPhotoCard,
+                    {
+                      borderRadius: theme.radii.md,
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.surfaceElevated,
+                    },
+                  ]}
+                >
+                  <Image source={cat.image} style={styles.catPhoto} resizeMode="cover" />
+                  <View
+                    style={[
+                      styles.catLabelBar,
+                      { backgroundColor: theme.colors.primary },
+                    ]}
+                  >
                     <Text
-                      style={[styles.desc, { color: theme.colors.textSecondary }]}
-                      numberOfLines={2}
+                      style={[theme.typography.caption, { color: '#FFFFFF', fontWeight: '700' }]}
+                      numberOfLines={1}
                     >
-                      {item.description}
+                      {cat.name}
                     </Text>
-                  ) : null}
-                  <View style={styles.priceRow}>
-                    <PriceText kurus={item.priceKurus} />
-                    {!item.isAvailable ? (
-                      <Text style={[styles.soldOut, { color: theme.colors.error }]}>
-                        {t.common.soldOut}
-                      </Text>
-                    ) : null}
                   </View>
-                </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* Quick Reorder for Returning Users */}
+        {recentOrder ? (
+          <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.inlineMeta}>
+                <RotateCcw size={16} color={theme.colors.primary} />
+                <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                  {t.home.reorderTitle}
+                </Text>
               </View>
-            </Card>
-          </Pressable>
-        )}
-      />
+              <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+                #{recentOrder.orderNumber}
+              </Text>
+            </View>
+            <Button
+              label={t.home.reorderAgain}
+              variant="outline"
+              size="sm"
+              onPress={() =>
+                router.push({ pathname: '/orders/[id]', params: { id: recentOrder.id } })
+              }
+            />
+          </Card>
+        ) : null}
+
+        {/* Featured / Best Sellers Horizontal Dish Cards */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <View style={styles.sectionHeader}>
+            <Text style={[theme.typography.titleMd, { color: theme.colors.text }]}>
+              {t.home.featured}
+            </Text>
+            <Pressable
+              onPress={() => router.push('/(tabs)/menu')}
+              style={styles.seeAllRow}
+            >
+              <Text style={[theme.typography.label, { color: theme.colors.primary }]}>
+                {t.common.all}
+              </Text>
+              <ArrowIcon size={15} color={theme.colors.primary} />
+            </Pressable>
+          </View>
+
+          {menuQuery.isLoading ? (
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <SkeletonBox height={180} width={150} borderRadius={16} />
+              <SkeletonBox height={180} width={150} borderRadius={16} />
+            </View>
+          ) : menuQuery.isError ? (
+            <StateView
+              kind="error"
+              title={t.common.errorTitle}
+              actionLabel={t.common.retry}
+              onAction={() => void menuQuery.refetch()}
+            />
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: theme.spacing.sm }}
+            >
+              {featuredItems.map((item) => {
+                const img = resolveOptionalDishImage(item.name, item.imageUrl) ?? BRAND_IMAGES.heroBg;
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => router.push({ pathname: '/menu/[id]', params: { id: item.id } })}
+                    style={[
+                      styles.dishCard,
+                      {
+                        backgroundColor: theme.colors.surfaceElevated,
+                        borderColor: theme.colors.border,
+                        borderRadius: theme.radii.md,
+                      },
+                    ]}
+                  >
+                    <Image source={img} style={styles.dishPhoto} resizeMode="cover" />
+                    <View style={styles.dishBody}>
+                      <Text
+                        style={[theme.typography.label, { color: theme.colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      <View style={styles.dishFooter}>
+                        <PriceText
+                          kurus={item.priceKurus}
+                          locale={language}
+                          style={[
+                            theme.typography.label,
+                            { color: theme.colors.primary, fontWeight: '700' },
+                          ]}
+                        />
+                        <Pressable
+                          onPress={() => handleQuickAdd(item)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t.menu.addToCart}
+                          style={[
+                            styles.quickAddBtn,
+                            { backgroundColor: theme.colors.primary },
+                          ]}
+                        >
+                          <Plus size={16} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
+  topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    justifyContent: 'space-between',
     gap: 10,
   },
-  logo: { width: 40, height: 40, borderRadius: 20 },
-  heroText: { flex: 1 },
-  heroTitle: { fontSize: 16, fontWeight: '700' },
-  heroSub: { fontSize: 11, marginTop: 1 },
-  langRow: { flexDirection: 'row', gap: 4 },
-  langChip: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6 },
-  statusBanner: { paddingVertical: 6, paddingHorizontal: 12 },
-  statusBannerText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  controls: { paddingHorizontal: 14, paddingTop: 10, gap: 8 },
-  modeRow: { flexDirection: 'row', gap: 6 },
-  modeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  zoneBtn: {
-    flex: 1,
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  zoneNote: { fontSize: 12, fontWeight: '600' },
-  searchRow: { flexDirection: 'row', gap: 8 },
-  searchBox: {
+    gap: 10,
     flex: 1,
+  },
+  logo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     borderWidth: 1,
-    borderRadius: 8,
     paddingHorizontal: 10,
-    height: 40,
+    paddingVertical: 4,
+    gap: 4,
+    maxWidth: 200,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  searchInput: { flex: 1, fontSize: 13 },
-  favFilterBtn: {
+  bellBtn: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  catScroll: { gap: 6, paddingBottom: 4 },
-  catChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1 },
-  list: { padding: 14, gap: 10 },
-  card: { padding: 10 },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  dishImg: { width: 82, height: 82, borderRadius: 10 },
-  info: { flex: 1, gap: 4 },
-  name: { fontSize: 15, fontWeight: '700' },
-  desc: { fontSize: 12 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  soldOut: { fontSize: 12, fontWeight: '600' },
+  metaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  langGroup: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    padding: 2,
+    gap: 2,
+  },
+  langPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 44,
+    gap: 10,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  seeAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  inlineMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroCard: {
+    overflow: 'hidden',
+    minHeight: 164,
+    justifyContent: 'center',
+  },
+  heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  heroScrim: {
+    padding: 16,
+    gap: 8,
+    backgroundColor: 'rgba(107, 21, 29, 0.72)',
+    minHeight: 164,
+    justifyContent: 'center',
+  },
+  heroPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F5EFE3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  catPhotoCard: {
+    width: 96,
+    height: 112,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  catPhoto: {
+    width: '100%',
+    height: 82,
+  },
+  catLabelBar: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dishCard: {
+    width: 154,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  dishPhoto: {
+    width: '100%',
+    height: 104,
+  },
+  dishBody: {
+    padding: 10,
+    gap: 8,
+  },
+  dishFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  quickAddBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

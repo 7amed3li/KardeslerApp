@@ -3,6 +3,8 @@ import { AuthorizationPolicy } from '../src/application/policies/authorization.p
 import { BackgroundJobsUseCases } from '../src/application/jobs/jobs.use-cases.js';
 import { LoyaltyUseCases } from '../src/application/loyalty/loyalty.use-cases.js';
 import { OrdersUseCases } from '../src/application/orders/orders.use-cases.js';
+import { PaymentsUseCases } from '../src/application/payments/payments.use-cases.js';
+import { PrintAndRealtimeUseCases } from '../src/application/print/print.use-cases.js';
 import { AuthUseCases } from '../src/application/auth/auth.use-cases.js';
 import { AdminUseCases } from '../src/application/admin/admin.use-cases.js';
 import { MenuAndDeliveryUseCases } from '../src/application/menu/menu.use-cases.js';
@@ -56,6 +58,10 @@ describe('Domain & Application Branch Coverage Suite (>=90% gate)', () => {
     expect(PaymentDomain.decideWebhookOutcome({ orderStatus: 'awaiting_payment', expectedTotalKurus: 10000, receivedAmountKurus: 10000, webhookStatus: 'failed' })).toEqual({
       action: 'mark_failed',
       nextOrderStatus: 'awaiting_payment',
+    });
+    expect(PaymentDomain.decideWebhookOutcome({ orderStatus: 'accepted', expectedTotalKurus: 10000, receivedAmountKurus: 10000, webhookStatus: 'paid' })).toEqual({
+      action: 'mark_paid',
+      nextOrderStatus: null,
     });
     expect(PaymentDomain.shouldAutoRefund('card_online', 'paid')).toBe(true);
     expect(PaymentDomain.shouldAutoRefund('cash_on_delivery', 'paid')).toBe(false);
@@ -192,6 +198,7 @@ describe('Domain & Application Branch Coverage Suite (>=90% gate)', () => {
     const tokens: any = { verifyStaffTotpSetupToken: vi.fn().mockResolvedValue({ sub: 's1' }), signStaffToken: vi.fn() };
     const authUc = new AuthUseCases({
       repo: authRepo, crypto: cryptoSvc, tokens, sms: {} as any,
+      googleOidc: { exchangeCodeAndVerifyIdToken: vi.fn() },
       rateLimiter: { check: vi.fn(), checkSmsCircuitBreaker: vi.fn(), resetAll: vi.fn() }, revokedTokens: {} as any,
       ids: { uuid: () => 'u', randomDigits6: () => '123456', randomHex: () => 'x' }, clock,
       allowReviewDemoOtp: false, reviewDemoPhone: '', reviewDemoCode: '', isTestEnv: true,
@@ -230,6 +237,99 @@ describe('Domain & Application Branch Coverage Suite (>=90% gate)', () => {
       { softDeleteForCustomer: vi.fn().mockResolvedValue(false) } as any,
     );
     await expect(usersUc.deleteAddress('u1', 'a1')).rejects.toMatchObject({ statusCode: 404 });
+
+    // PaymentsUseCases branches
+    const pRepo: any = {
+      processWebhookEvent: vi
+        .fn()
+        .mockResolvedValueOnce({ outcome: 'idempotent_replay' })
+        .mockResolvedValueOnce({ outcome: 'not_found' })
+        .mockResolvedValueOnce({ outcome: 'amount_mismatch' })
+        .mockResolvedValueOnce({ outcome: 'activated' })
+        .mockResolvedValueOnce({ outcome: 'other', orderStatus: 'cancelled' }),
+    };
+    const pProvider: any = {
+      providerName: 'iyzico',
+      verifyWebhook: vi.fn().mockReturnValueOnce(false).mockReturnValue(true),
+    };
+    const pUc = new PaymentsUseCases(pRepo, pProvider, { publish, subscribe: vi.fn() } as any, clock);
+    const whInput = { providerEventId: 'e1', orderId: 'o1', amountKurus: 1000, status: 'paid' as const, providerRef: 'r1', signature: 's1' };
+    await expect(pUc.processWebhook(whInput)).rejects.toMatchObject({ statusCode: 401 });
+    expect(await pUc.processWebhook(whInput)).toEqual({ idempotentReplay: true, orderId: 'o1', status: 'already_processed' });
+    await expect(pUc.processWebhook(whInput)).rejects.toMatchObject({ statusCode: 404 });
+    expect(await pUc.processWebhook(whInput)).toEqual({
+      idempotentReplay: false,
+      orderId: 'o1',
+      status: 'fraud_flagged',
+      message: 'Tutar uyumsuzluğu tespit edildi ve sahtekarlık incelemesine alındı',
+    });
+    expect(await pUc.processWebhook(whInput)).toEqual({ idempotentReplay: false, orderId: 'o1', status: 'new' });
+    expect(await pUc.processWebhook(whInput)).toEqual({ idempotentReplay: false, orderId: 'o1', status: 'cancelled' });
+
+    // PrintAndRealtimeUseCases branches
+    const printRepo: any = {
+      findPendingPrintJobs: vi.fn().mockResolvedValue([]),
+      ackPrintJob: vi.fn().mockResolvedValue(null),
+    };
+    const settingsRepo: any = {
+      recordHeartbeat: vi.fn().mockResolvedValue(undefined),
+    };
+    const eventBus: any = {
+      publish,
+      subscribe: vi.fn().mockResolvedValue(() => {}),
+      getEventsSince: vi.fn().mockResolvedValue([]),
+    };
+    const printUc = new PrintAndRealtimeUseCases(printRepo, settingsRepo, eventBus, clock);
+    await expect(printUc.ackPrintJob('j1', 'printed')).rejects.toMatchObject({ statusCode: 404 });
+    expect(await printUc.recordHeartbeat('s1', 'staff', { deviceId: 'd1', kind: 'print_agent' })).toEqual({ recorded: true });
+    expect(await printUc.getEventSnapshot()).toEqual({ events: [] });
+    const unsub = await printUc.subscribeStaffEvents(() => {});
+    expect(typeof unsub).toBe('function');
+
+    // AuthUseCases branches
+    const authSms: any = { sendOtp: vi.fn().mockResolvedValue(undefined) };
+    const authUc2 = new AuthUseCases({
+      repo: {
+        ...authRepo,
+        getLatestUnconsumedOtp: vi
+          .fn()
+          .mockResolvedValueOnce({ id: 'o1', createdAt: new Date(now.getTime() - 10000) })
+          .mockResolvedValue(null),
+        createOtp: vi.fn().mockResolvedValue({ id: 'o1' }),
+        touchStaffLogin: vi.fn().mockResolvedValue(undefined),
+      },
+      crypto: {
+        ...cryptoSvc,
+        verifyPassword: vi.fn().mockResolvedValue(true),
+        verifyTotpCode: vi.fn().mockReturnValue(true),
+        generateTotpSecret: () => 'SEC123',
+      },
+      tokens: {
+        ...tokens,
+        signStaffToken: vi.fn().mockResolvedValue({ accessToken: 'staff_tok' }),
+        verifyStaffTotpSetupToken: vi.fn().mockResolvedValue({ sub: 's1' }),
+      },
+      sms: authSms,
+      googleOidc: { exchangeCodeAndVerifyIdToken: vi.fn() },
+      rateLimiter: { check: vi.fn(), checkSmsCircuitBreaker: vi.fn(), resetAll: vi.fn() },
+      revokedTokens: {} as any,
+      ids: { uuid: () => 'u', randomDigits6: () => '123456', randomHex: () => 'x' },
+      clock,
+      allowReviewDemoOtp: true,
+      reviewDemoPhone: '+905550000000',
+      reviewDemoCode: '111222',
+      isTestEnv: false,
+    });
+    await expect(authUc2.requestCustomerOtp('+1234567890', '1.1.1.1')).rejects.toMatchObject({ statusCode: 400 });
+    await expect(authUc2.requestCustomerOtp('+905331112233', '1.1.1.1')).rejects.toMatchObject({ statusCode: 429 });
+    const demoReq = await authUc2.requestCustomerOtp('+905550000000', '1.1.1.1');
+    expect(demoReq.expiresInSeconds).toBe(300);
+    const staffLoginOk = await authUc2.loginStaff('a@b.c', 'pass', '123456');
+    if (!staffLoginOk.totpSetupRequired) {
+      expect(staffLoginOk.accessToken).toBe('staff_tok');
+    }
+    const totpSetup = await authUc2.setupStaffTotp('setup_tok');
+    expect(totpSetup.secret).toBe('SEC123');
   });
 });
 

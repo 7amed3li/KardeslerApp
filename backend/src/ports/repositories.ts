@@ -76,11 +76,35 @@ export interface AuthRepository {
   getStaffByEmailForAuth(email: string): Promise<StaffAuthRecord | null>;
   touchStaffLogin(staffId: string, now: Date): Promise<void>;
   enableStaffTotp(staffId: string, encryptedSecret: string, now: Date): Promise<{ id: string; email: string; role: 'owner' | 'staff' } | null>;
+  findOrProvisionGoogleUserAndSession(input: {
+    providerSubject: string;
+    email: string | null;
+    name: string | null;
+    newReferralCode: string;
+    refreshTokenHash: string;
+    familyId: string;
+    refreshExpiresAt: Date;
+    deviceInfo: string | null;
+    now: Date;
+  }): Promise<{ user: UserProfile; isNewUser: boolean }>;
+  linkGoogleIdentity(input: {
+    userId: string;
+    providerSubject: string;
+    email: string | null;
+  }): Promise<{ status: 'linked' | 'already_linked_self' | 'already_linked_other' | 'provider_already_linked_to_user' }>;
+  unlinkCustomerIdentity(input: {
+    userId: string;
+    provider: 'google';
+  }): Promise<{ status: 'ok' | 'no_fallback_login' | 'not_found' }>;
+  listCustomerIdentities(userId: string): Promise<Array<{ provider: string; emailAtLink: string | null; createdAt: string }>>;
 }
 
 export interface UserRepository {
   anonymizeCustomer(userId: string): Promise<void>;
-  updateCustomerProfile(userId: string, input: { name?: string; email?: string | null; preferredLanguage?: SupportedLanguage }): Promise<UserProfile>;
+  updateCustomerProfile(
+    userId: string,
+    input: { name?: string; email?: string | null; phone?: string | null; preferredLanguage?: SupportedLanguage },
+  ): Promise<UserProfile>;
   registerDevice(userId: string, input: { pushToken: string; platform: string; appVersion: string }): Promise<{ id: string; pushToken: string; platform: string }>;
   getReferralSummary(userId: string): Promise<{ referralCode: string; referrals: unknown[] }>;
 }
@@ -120,6 +144,8 @@ export interface DeliveryRepository {
   findZoneRuleAtPoint(lat: number, lng: number): Promise<DeliveryZoneRule | null>;
   listZonesAdmin(staffId: string): Promise<unknown[]>;
   updateZoneAdmin(staffId: string, id: string, patch: { minOrderKurus?: number; estimatedMinutes?: number; isActive?: boolean }): Promise<unknown | null>;
+  createZoneAdmin(staffId: string, input: { name: string; polygonWkt: string; minOrderKurus: number; deliveryFeeKurus: number; estimatedMinutes?: number }): Promise<unknown>;
+  deleteZoneAdmin(staffId: string, id: string): Promise<boolean>;
 }
 
 export interface CouponRepository {
@@ -178,6 +204,7 @@ export interface OrderRepository {
   }): Promise<{ order: OrderSummaryRecord; shouldRefundPaidCard: boolean; paymentProviderRef: string | null; paymentAmountKurus: number }>;
   assignDriver(staffId: string, role: 'staff' | 'owner', orderId: string, driverId: string): Promise<unknown | null>;
   createReprintJob(staffId: string, role: 'staff' | 'owner', orderId: string): Promise<unknown>;
+  searchStaffOrders(staffId: string, role: 'staff' | 'owner', query: string): Promise<unknown[]>;
 }
 
 export interface PaymentRepository {
@@ -204,6 +231,7 @@ export interface PaymentRepository {
     refundRef: string;
     now: Date;
   }): Promise<boolean>;
+  getOrderPaymentForCheckout(userId: string, orderId: string): Promise<{ totalKurus: number; customerName: string; customerPhone: string; status: string } | null>;
 }
 
 export interface LoyaltyRepository {
@@ -262,7 +290,11 @@ export interface AdminRepository {
   getAuditLogs(staffId: string): Promise<unknown[]>;
   listDrivers(staffId: string): Promise<unknown[]>;
   createDriver(staffId: string, input: { name: string; phone: string; vehiclePlate?: string }): Promise<unknown>;
+  updateDriver(staffId: string, id: string, patch: { name?: string; phone?: string; isActive?: boolean }): Promise<unknown | null>;
   listStaff(staffId: string): Promise<unknown[]>;
+  createStaff(staffId: string, input: { email: string; role: 'staff' | 'owner'; passwordHash: string }): Promise<unknown>;
+  updateStaff(staffId: string, id: string, patch: { role?: 'staff' | 'owner'; isActive?: boolean }): Promise<unknown | null>;
+  resetStaff2FA(staffId: string, id: string): Promise<boolean>;
   listFraudFlags(staffId: string): Promise<unknown[]>;
   resolveFraudFlag(staffId: string, flagId: string, now: Date): Promise<unknown | null>;
   listBanners(staffId: string): Promise<unknown[]>;

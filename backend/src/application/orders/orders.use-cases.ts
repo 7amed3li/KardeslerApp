@@ -147,6 +147,10 @@ export class OrdersUseCases {
     return { orders: await this.d.ordersRepo.listStaffOrders(staffId, role) };
   }
 
+  async searchStaffOrders(staffId: string, role: 'staff' | 'owner', query: string) {
+    return { orders: await this.d.ordersRepo.searchStaffOrders(staffId, role, query) };
+  }
+
   async transitionOrderAsStaff(staffId: string, role: 'staff' | 'owner', orderId: string, status: OrderStatus, cancelReason?: string) {
     const res = await this.d.ordersRepo.transitionOrderAsStaff({
       staffId, role, orderId, toStatus: status, cancelReason,

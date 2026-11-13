@@ -1,4 +1,26 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { z } from 'zod';
+
+function loadDotEnvIfPresent(): void {
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return;
+  const envPath = resolve(process.cwd(), '.env');
+  if (!existsSync(envPath)) return;
+  const content = readFileSync(envPath, 'utf8');
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eqIndex = line.indexOf('=');
+    if (eqIndex <= 0) continue;
+    const key = line.slice(0, eqIndex).trim();
+    const val = line.slice(eqIndex + 1).trim();
+    if (key && process.env[key] === undefined) {
+      process.env[key] = val;
+    }
+  }
+}
+
+loadDotEnvIfPresent();
 
 const EnvSchema = z
   .object({
@@ -50,6 +72,11 @@ const EnvSchema = z
     REVIEW_DEMO_PHONE: z.string().default('+905000000000'),
     REVIEW_DEMO_OTP_CODE: z.string().default('145300'),
     ADMIN_ORIGIN: z.string().default('http://localhost:5173'),
+    GOOGLE_CLIENT_IDS: z.string().default(''),
+    GOOGLE_REDIRECT_URIS: z.string().default('kardesler://auth/google,http://localhost:8081/auth'),
+    GOOGLE_WEB_CLIENT_SECRET: z.string().default(''),
+    GOOGLE_TOKEN_ENDPOINT: z.string().url().default('https://oauth2.googleapis.com/token'),
+    GOOGLE_JWKS_URI: z.string().url().default('https://www.googleapis.com/oauth2/v3/certs'),
   })
   .superRefine((val, ctx) => {
     if (val.NODE_ENV === 'production') {

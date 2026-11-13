@@ -94,8 +94,8 @@ describe('Phase 6 Comprehensive Coverage & Edge Cases', () => {
     expect(parseSafeDeepLink(null)).toBeNull();
     expect(parseSafeDeepLink('')).toBeNull();
     expect(parseSafeDeepLink('kardesler://')).toEqual({ route: '/(tabs)' });
-    expect(parseSafeDeepLink('/menu')).toEqual({ route: '/(tabs)' });
-    expect(parseSafeDeepLink('kardesler://cart')).toEqual({ route: '/(tabs)/cart' });
+    expect(parseSafeDeepLink('/menu')).toEqual({ route: '/(tabs)/menu' });
+    expect(parseSafeDeepLink('kardesler://cart')).toEqual({ route: '/cart' });
     expect(parseSafeDeepLink('kardesler://orders')).toEqual({ route: '/(tabs)/orders' });
     expect(parseSafeDeepLink('kardesler://profile')).toEqual({ route: '/(tabs)/profile' });
     expect(parseSafeDeepLink('kardesler://payment-return')).toEqual({

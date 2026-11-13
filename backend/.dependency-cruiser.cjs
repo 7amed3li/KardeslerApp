@@ -26,7 +26,7 @@ module.exports = {
       comment: 'application/ may only import domain/, ports/, and @kardesler/shared — never infrastructure/ or http/.',
       from: { path: '^src/application/' },
       to: {
-        path: '^(src/(http|infrastructure|config|db|composition-root|main))|node_modules/(fastify|drizzle-orm|postgres|ioredis|bullmq)',
+        path: '^(src/(http|infrastructure|config|db|composition-root|main))|node_modules/(fastify|drizzle-orm|postgres|ioredis|bullmq)|^(node:)?crypto$',
       },
     },
     {

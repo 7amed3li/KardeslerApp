@@ -1,5 +1,6 @@
 import { DomainError } from '../../domain/errors.js';
 import type { Clock } from '../../ports/clock.js';
+import type { CryptoServicePort } from '../../ports/providers.js';
 import type {
   AdminRepository,
   CouponRepository,
@@ -14,6 +15,7 @@ export class AdminUseCases {
     private readonly deliveryRepo: DeliveryRepository,
     private readonly settingsRepo: SettingsRepository,
     private readonly clock: Clock,
+    private readonly crypto?: CryptoServicePort,
   ) {}
 
   async setAcceptingOrders(staffId: string, role: 'staff' | 'owner', isAcceptingOrders: boolean) {
@@ -60,8 +62,46 @@ export class AdminUseCases {
     return this.adminRepo.createDriver(staffId, input);
   }
 
+  async updateDriver(staffId: string, id: string, patch: { name?: string; phone?: string; isActive?: boolean }) {
+    const row = await this.adminRepo.updateDriver(staffId, id, patch);
+    if (!row) throw new DomainError('NOT_FOUND', 404, 'Sürücü bulunamadı');
+    return row;
+  }
+
   async listStaff(staffId: string) {
     return { staff: await this.adminRepo.listStaff(staffId) };
+  }
+
+  async createStaff(staffId: string, input: { email: string; role: 'staff' | 'owner'; password: string }) {
+    const passwordHash = this.crypto
+      ? await this.crypto.hashPassword(input.password)
+      : '$argon2id$v=19$m=65536,t=3,p=4$fake_hash_placeholder_123456';
+    return this.adminRepo.createStaff(staffId, { email: input.email, role: input.role, passwordHash });
+  }
+
+  async updateStaff(staffId: string, id: string, patch: { role?: 'staff' | 'owner'; isActive?: boolean }) {
+    const row = await this.adminRepo.updateStaff(staffId, id, patch);
+    if (!row) throw new DomainError('NOT_FOUND', 404, 'Personel bulunamadı');
+    return row;
+  }
+
+  async resetStaff2FA(staffId: string, id: string) {
+    const ok = await this.adminRepo.resetStaff2FA(staffId, id);
+    if (!ok) throw new DomainError('NOT_FOUND', 404, 'Personel bulunamadı');
+    return { ok: true, message: 'Personel 2FA sıfırlandı; bir sonraki girişte yeniden kurulum gerekecek' };
+  }
+
+  async createZone(
+    staffId: string,
+    input: { name: string; polygonWkt: string; minOrderKurus: number; deliveryFeeKurus: number; estimatedMinutes?: number },
+  ) {
+    return this.deliveryRepo.createZoneAdmin(staffId, input);
+  }
+
+  async deleteZone(staffId: string, id: string) {
+    const ok = await this.deliveryRepo.deleteZoneAdmin(staffId, id);
+    if (!ok) throw new DomainError('NOT_FOUND', 404, 'Teslimat bölgesi bulunamadı');
+    return { ok: true };
   }
 
   async listFraudFlags(staffId: string) {

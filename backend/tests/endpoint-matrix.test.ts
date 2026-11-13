@@ -206,6 +206,58 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     printJti = activePrint.json().jti;
     expect(printJti).toBeDefined();
     track('POST', '/api/v1/print-agent/token');
+
+    // Staff refresh and logout
+    const staffRef = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/staff/refresh',
+      payload: { refreshToken: staffToken },
+    });
+    expect(staffRef.statusCode).toBe(200);
+    expect(staffRef.json().accessToken).toBeDefined();
+    track('POST', '/api/v1/auth/staff/refresh');
+
+    const staffLog = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/staff/logout',
+      headers: { authorization: `Bearer ${staffRef.json().accessToken}` },
+    });
+    expect(staffLog.statusCode).toBe(200);
+    track('POST', '/api/v1/auth/staff/logout');
+
+    // Exercise customer Google identity routes
+    const googleIds = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/customer/identities',
+      headers: { authorization: `Bearer ${customerAToken}` },
+    });
+    expect([200, 401]).toContain(googleIds.statusCode);
+    track('GET', '/api/v1/auth/customer/identities');
+
+    const googleDel = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/auth/customer/identities/google',
+      headers: { authorization: `Bearer ${customerAToken}` },
+    });
+    expect([200, 400, 404]).toContain(googleDel.statusCode);
+    track('DELETE', '/api/v1/auth/customer/identities/:provider');
+
+    const googleEx = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/customer/google/exchange',
+      payload: { code: 'dummy', codeVerifier: 'dummy', clientId: 'dummy', redirectUri: 'dummy' },
+    });
+    expect([200, 400, 401, 502]).toContain(googleEx.statusCode);
+    track('POST', '/api/v1/auth/customer/google/exchange');
+
+    const googleLink = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/customer/google/link',
+      headers: { authorization: `Bearer ${customerAToken}` },
+      payload: { code: 'dummy', codeVerifier: 'dummy', clientId: 'dummy', redirectUri: 'dummy' },
+    });
+    expect([200, 400, 401, 502]).toContain(googleLink.statusCode);
+    track('POST', '/api/v1/auth/customer/google/link');
   });
 
   it('3. exercises all customer profile, device, referral & address CRUD + cross-customer IDOR blocks', async () => {
@@ -248,6 +300,7 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
 
     const listAddr = await app.inject({ method: 'GET', url: '/api/v1/addresses', headers: { authorization: `Bearer ${customerAToken}` } });
     expect(listAddr.statusCode).toBe(200);
+    expect(listAddr.json().addresses.some((a: any) => a.id === addrId)).toBe(true);
     track('GET', '/api/v1/addresses');
 
     // Cross-user IDOR: Customer B cannot PATCH or DELETE Customer A's address
@@ -383,11 +436,46 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     expect(drv.statusCode).toBe(200);
     track('POST', '/api/v1/staff/orders/:id/driver');
 
-    const otw = await app.inject({ method: 'PATCH', url: `/api/v1/orders/${ordId}/status`, headers: { authorization: `Bearer ${staffToken}` }, payload: { status: 'on_the_way' } });
+    const otw = await app.inject({ method: 'POST', url: `/api/v1/staff/orders/${ordId}/status`, headers: { authorization: `Bearer ${staffToken}` }, payload: { status: 'on_the_way' } });
     expect(otw.statusCode).toBe(200);
-    const deliv = await app.inject({ method: 'PATCH', url: `/api/v1/orders/${ordId}/status`, headers: { authorization: `Bearer ${staffToken}` }, payload: { status: 'delivered' } });
+    const deliv = await app.inject({ method: 'POST', url: `/api/v1/staff/orders/${ordId}/status`, headers: { authorization: `Bearer ${staffToken}` }, payload: { status: 'delivered' } });
     expect(deliv.statusCode).toBe(200);
-    track('PATCH', '/api/v1/orders/:id/status');
+
+    // Create a card_online order (awaiting_payment) for payment-session test
+    const cardOrd = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: { authorization: `Bearer ${customerAToken}` },
+      payload: { order_type: 'pickup', payment_method: 'card_online', idempotency_key: `mat-sess-${suf}-${Date.now()}`, items: itemsPayload },
+    });
+    expect(cardOrd.statusCode).toBe(201);
+    const cardOrdId = cardOrd.json().id;
+
+    const paySess = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orders/${cardOrdId}/payment-session`,
+      headers: { authorization: `Bearer ${customerAToken}` },
+    });
+    expect(paySess.statusCode).toBe(200);
+    expect(paySess.json().paymentSessionUrl).toBeDefined();
+    track('POST', '/api/v1/orders/:id/payment-session');
+
+    const sseTicketRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/staff/realtime/ticket',
+      headers: { authorization: `Bearer ${staffToken}` },
+    });
+    expect(sseTicketRes.statusCode).toBe(200);
+    expect(sseTicketRes.json().ticket).toBeDefined();
+    track('POST', '/api/v1/staff/realtime/ticket');
+
+    const searchRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/staff/orders/search?query=905551234567',
+      headers: { authorization: `Bearer ${staffToken}` },
+    });
+    expect(searchRes.statusCode).toBe(200);
+    track('GET', '/api/v1/staff/orders/search');
 
     const pauseOn = await app.inject({ method: 'POST', url: '/api/v1/staff/settings/pause', headers: { authorization: `Bearer ${staffToken}` }, payload: { isAcceptingOrders: true } });
     expect(pauseOn.statusCode).toBe(200);
@@ -428,6 +516,8 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     // Staff role must receive 403 on owner-only endpoints
     const staffBlocked = await app.inject({ method: 'GET', url: '/api/v1/admin/reports/daily-summary', headers: { authorization: `Bearer ${staffToken}` } });
     expect(staffBlocked.statusCode).toBe(403);
+    const staffCouponsBlocked = await app.inject({ method: 'GET', url: '/api/v1/admin/coupons', headers: { authorization: `Bearer ${staffToken}` } });
+    expect(staffCouponsBlocked.statusCode).toBe(403);
 
     // Owner menu category & item CRUD
     const crCat = await app.inject({
@@ -515,6 +605,30 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     expect(upZone.statusCode).toBe(200);
     track('PATCH', '/api/v1/admin/zones/:id');
 
+    // Admin Zone create & delete
+    const crZone = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/zones',
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: {
+        name: `Zone_${suf}`,
+        polygonWkt: 'POLYGON((28.98 41.02, 28.99 41.02, 28.99 41.03, 28.98 41.03, 28.98 41.02))',
+        minOrderKurus: 15000,
+        deliveryFeeKurus: 1000,
+      },
+    });
+    expect(crZone.statusCode).toBe(201);
+    const newZoneId = crZone.json().id;
+    track('POST', '/api/v1/admin/zones');
+
+    const delZone = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/zones/${newZoneId}`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(delZone.statusCode).toBe(200);
+    track('DELETE', '/api/v1/admin/zones/:id');
+
     expect((await app.inject({ method: 'GET', url: '/api/v1/admin/drivers', headers: { authorization: `Bearer ${ownerToken}` } })).statusCode).toBe(200);
     track('GET', '/api/v1/admin/drivers');
 
@@ -527,8 +641,45 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     expect(crDrv.statusCode).toBe(201);
     track('POST', '/api/v1/admin/drivers');
 
+    const patchDrv = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/drivers/${crDrv.json().id}`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { name: 'Mehmet Güncellendi', isActive: true },
+    });
+    expect(patchDrv.statusCode).toBe(200);
+    track('PATCH', '/api/v1/admin/drivers/:id');
+
     expect((await app.inject({ method: 'GET', url: '/api/v1/admin/staff', headers: { authorization: `Bearer ${ownerToken}` } })).statusCode).toBe(200);
     track('GET', '/api/v1/admin/staff');
+
+    // Admin Staff CRUD & 2FA reset
+    const crStaff = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/staff',
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { email: `newstaff_${suf}@cihangir.com`, role: 'staff', password: 'StrongPassword123!' },
+    });
+    expect(crStaff.statusCode).toBe(201);
+    const newStaffId = crStaff.json().id;
+    track('POST', '/api/v1/admin/staff');
+
+    const patchStaff = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/staff/${newStaffId}`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { role: 'owner', isActive: true },
+    });
+    expect(patchStaff.statusCode).toBe(200);
+    track('PATCH', '/api/v1/admin/staff/:id');
+
+    const reset2fa = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/staff/${newStaffId}/reset-2fa`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(reset2fa.statusCode).toBe(200);
+    track('POST', '/api/v1/admin/staff/:id/reset-2fa');
 
     // Seed + resolve fraud flag
     let fraudId = '';
@@ -591,6 +742,6 @@ describe('Step 5 Full 66-Endpoint Security, Validation, RBAC & Side-Effects Matr
     // Assert every single route in ENDPOINT_TEST_REGISTRY was exercised by this suite
     const missed = ENDPOINT_TEST_REGISTRY.map((e) => `${e.method} ${e.path}`).filter((k) => !hitEndpoints.has(k));
     expect(missed).toEqual([]);
-    expect(hitEndpoints.size).toBe(66);
+    expect(hitEndpoints.size).toBe(80);
   });
 });

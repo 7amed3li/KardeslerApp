@@ -21,6 +21,12 @@ function formatEndpointRow(method: string, routePath: string, op: Record<string,
 function inferAuthBadge(routePath: string): string {
   if (routePath.startsWith('/health') || routePath === '/readyz' || routePath === '/docs') return 'public';
   if (routePath.startsWith('/api/v1/auth/staff/totp/')) return 'totp_setup JWT';
+  if (
+    routePath === '/api/v1/auth/customer/google/link' ||
+    routePath.startsWith('/api/v1/auth/customer/identities')
+  ) {
+    return 'customer JWT';
+  }
   if (routePath.startsWith('/api/v1/auth/') || routePath === '/api/v1/menu' || routePath === '/api/v1/banners' || routePath === '/api/v1/settings/public' || routePath === '/api/v1/delivery/check' || routePath === '/api/v1/orders/quote' || routePath === '/api/v1/cart/price') {
     return routePath.endsWith('/logout') ? 'customer JWT' : 'public';
   }

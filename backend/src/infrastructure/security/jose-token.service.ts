@@ -142,6 +142,33 @@ export class JoseTokenService implements TokenServicePort {
     );
   }
 
+  async signStaffSseTicket(staffId: string, role: StaffRole): Promise<string> {
+    return this.sign(
+      { role, purpose: 'sse_ticket' },
+      staffId,
+      'kardesler-admin-sse',
+      '60s',
+      this.keyring.staffSecret,
+    );
+  }
+
+  async verifyStaffSseTicket(ticket: string): Promise<StaffTokenClaims> {
+    try {
+      const { payload, kid } = await this.verify(
+        ticket,
+        'kardesler-admin-sse',
+        this.keyring.staffSecret,
+        this.keyring.staffPrevSecret,
+      );
+      if ((payload.role !== 'owner' && payload.role !== 'staff') || typeof payload.sub !== 'string') {
+        throw new Error('Invalid staff ticket claims');
+      }
+      return { sub: payload.sub, role: payload.role, kid };
+    } catch {
+      throw new DomainError('UNAUTHORIZED', 401, 'Geçersiz veya süresi dolmuş SSE bileti (ticket)');
+    }
+  }
+
   async verifyStaffTotpSetupToken(token: string): Promise<{ sub: string }> {
     try {
       const { payload } = await this.verify(

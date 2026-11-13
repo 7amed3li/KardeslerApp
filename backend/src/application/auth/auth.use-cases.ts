@@ -1,7 +1,7 @@
 import { DomainError } from '../../domain/errors.js';
 import type { StaffRole } from '@kardesler/shared';
 import type { Clock, IdGenerator } from '../../ports/clock.js';
-import type { CryptoServicePort, SmsProvider, TokenServicePort } from '../../ports/providers.js';
+import type { CryptoServicePort, GoogleExchangeInput, GoogleOidcProviderPort, SmsProvider, TokenServicePort } from '../../ports/providers.js';
 import type { AuthRepository } from '../../ports/repositories.js';
 import type { RateLimiterPort, RevokedTokenStorePort } from '../../ports/state.js';
 
@@ -10,6 +10,7 @@ export interface AuthDeps {
   tokens: TokenServicePort;
   crypto: CryptoServicePort;
   sms: SmsProvider;
+  googleOidc: GoogleOidcProviderPort;
   rateLimiter: RateLimiterPort;
   revokedTokens: RevokedTokenStorePort;
   clock: Clock;
@@ -155,6 +156,115 @@ export class AuthUseCases {
   async revokePrintAgentToken(jti: string) {
     await this.d.revokedTokens.revoke(jti);
     return { revoked: true, jti };
+  }
+
+  async refreshStaffToken(token: string) {
+    const claims = await this.d.tokens.verifyStaffToken(token);
+    const { accessToken } = await this.d.tokens.signStaffToken(claims.sub, claims.role);
+    return { accessToken };
+  }
+
+  async logoutStaff(staffIdOrJti: string) {
+    await this.d.revokedTokens.revoke(staffIdOrJti);
+    return { ok: true };
+  }
+
+  private async consumeGoogleReplayKeys(code: string, nonce: string): Promise<void> {
+    const codeKey = `google_code:${this.d.crypto.hashRefreshToken(code)}`;
+    const nonceKey = `google_nonce:${this.d.crypto.hashRefreshToken(nonce)}`;
+    const [codeUsed, nonceUsed] = await Promise.all([
+      this.d.revokedTokens.isRevoked(codeKey),
+      this.d.revokedTokens.isRevoked(nonceKey),
+    ]);
+    if (codeUsed || nonceUsed) {
+      throw new DomainError('UNAUTHORIZED', 401, 'Google yetkilendirme kodu veya nonce daha önce kullanılmış');
+    }
+    await Promise.all([
+      this.d.revokedTokens.revoke(codeKey, 600),
+      this.d.revokedTokens.revoke(nonceKey, 600),
+    ]);
+  }
+
+  async exchangeGoogleCode(input: GoogleExchangeInput, ip: string | undefined, deviceInfo?: string) {
+    await this.d.rateLimiter.check(`google_auth:ip:${ip ?? 'unknown'}`, 20, 15 * 60 * 1000);
+    await this.consumeGoogleReplayKeys(input.code, input.nonce);
+
+    const claims = await this.d.googleOidc.exchangeCodeAndVerifyIdToken(input);
+    const rawRefresh = this.d.ids.randomHex(32);
+
+    const { user, isNewUser } = await this.d.repo.findOrProvisionGoogleUserAndSession({
+      providerSubject: claims.sub,
+      email: claims.email,
+      name: claims.name,
+      newReferralCode: `KC${this.d.ids.randomHex(4).toUpperCase()}`,
+      refreshTokenHash: this.d.crypto.hashRefreshToken(rawRefresh),
+      familyId: this.d.ids.uuid(),
+      refreshExpiresAt: new Date(this.d.clock.nowMs() + 30 * 24 * 60 * 60 * 1000),
+      deviceInfo: deviceInfo ?? null,
+      now: this.d.clock.now(),
+    });
+
+    if (user.isBlocked) {
+      throw new DomainError('FORBIDDEN', 403, 'Hesabınız askıya alınmıştır');
+    }
+
+    const { accessToken } = await this.d.tokens.signCustomerToken(user.id);
+    return {
+      accessToken,
+      refreshToken: rawRefresh,
+      isNewUser,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        email: user.email,
+        referralCode: user.referralCode,
+      },
+    };
+  }
+
+  async linkGoogleAccount(userId: string, input: GoogleExchangeInput) {
+    await this.d.rateLimiter.check(`google_link:user:${userId}`, 10, 15 * 60 * 1000);
+    await this.consumeGoogleReplayKeys(input.code, input.nonce);
+
+    const claims = await this.d.googleOidc.exchangeCodeAndVerifyIdToken(input);
+    const res = await this.d.repo.linkGoogleIdentity({
+      userId,
+      providerSubject: claims.sub,
+      email: claims.email,
+    });
+
+    if (res.status === 'already_linked_other') {
+      throw new DomainError('CONFLICT', 409, 'Bu Google hesabı başka bir kullanıcıya bağlıdır');
+    }
+    if (res.status === 'provider_already_linked_to_user') {
+      throw new DomainError('CONFLICT', 409, 'Hesabınıza zaten bir Google hesabı bağlıdır');
+    }
+
+    return {
+      linked: true,
+      provider: 'google' as const,
+      email: claims.email,
+    };
+  }
+
+  async unlinkIdentity(userId: string, provider: 'google') {
+    const res = await this.d.repo.unlinkCustomerIdentity({ userId, provider });
+    if (res.status === 'not_found') {
+      throw new DomainError('NOT_FOUND', 404, 'Bağlı giriş yöntemi bulunamadı');
+    }
+    if (res.status === 'no_fallback_login') {
+      throw new DomainError(
+        'CONFLICT',
+        409,
+        'Alternatif giriş yöntemi (telefon numarası) olmadan tek giriş yönteminiz kaldırılamaz',
+      );
+    }
+    return { unlinked: true, provider };
+  }
+
+  async listIdentities(userId: string) {
+    return this.d.repo.listCustomerIdentities(userId);
   }
 }
 

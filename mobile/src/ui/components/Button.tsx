@@ -4,80 +4,118 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
+  type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../themes/ThemeProvider';
 
-interface ButtonProps {
-  title: string;
-  onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger';
-  disabled?: boolean;
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonSize = 'md' | 'sm';
+
+export interface ButtonProps extends Omit<PressableProps, 'style'> {
+  label?: string;
+  title?: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
+  icon?: React.ReactNode;
+  trailingIcon?: React.ReactNode;
+  fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
-  testID?: string;
-  accessibilityLabel?: string;
 }
 
 export function Button({
+  label,
   title,
-  onPress,
   variant = 'primary',
-  disabled = false,
+  size = 'md',
   loading = false,
+  disabled = false,
+  icon,
+  trailingIcon,
+  fullWidth = false,
   style,
-  testID,
-  accessibilityLabel,
+  ...rest
 }: ButtonProps) {
-  const theme = useTheme();
+  const { colors, radii, spacing, typography, hitTarget } = useTheme();
+  const isDisabled = disabled || loading;
+  const textLabel = label ?? title ?? '';
 
-  const bgColor =
-    variant === 'primary'
-      ? theme.colors.primary
-      : variant === 'danger'
-        ? theme.colors.error
-        : variant === 'secondary'
-          ? theme.colors.surfaceElevated
-          : 'transparent';
-
-  const textColor =
-    variant === 'primary' || variant === 'danger'
-      ? theme.colors.primaryText
-      : theme.colors.text;
-
-  const borderColor =
-    variant === 'outline'
-      ? theme.colors.border
-      : variant === 'secondary'
-        ? theme.colors.border
-        : 'transparent';
+  const palette = {
+    primary: {
+      bg: colors.primary,
+      bgPressed: colors.primaryPressed,
+      text: colors.primaryText,
+      border: 'transparent',
+    },
+    secondary: {
+      bg: colors.surface,
+      bgPressed: colors.border,
+      text: colors.text,
+      border: colors.border,
+    },
+    outline: {
+      bg: 'transparent',
+      bgPressed: colors.primarySoft,
+      text: colors.primary,
+      border: colors.primary,
+    },
+    ghost: {
+      bg: 'transparent',
+      bgPressed: colors.surface,
+      text: colors.text,
+      border: 'transparent',
+    },
+    danger: {
+      bg: colors.error,
+      bgPressed: '#8C1D17',
+      text: '#FFFFFF',
+      border: 'transparent',
+    },
+  }[variant];
 
   return (
     <Pressable
-      testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? title}
-      accessibilityState={{ disabled: disabled || loading }}
-      disabled={disabled || loading}
-      onPress={onPress}
+      accessibilityLabel={rest.accessibilityLabel ?? textLabel}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
         {
-          backgroundColor:
-            pressed && variant === 'primary' ? theme.colors.primaryPressed : bgColor,
-          borderColor,
-          borderWidth: variant === 'outline' || variant === 'secondary' ? 1 : 0,
-          borderRadius: theme.radii.md,
-          opacity: disabled || loading ? 0.55 : 1,
+          minHeight: hitTarget.min,
+          minWidth: hitTarget.min,
+          paddingHorizontal: size === 'sm' ? spacing.sm : spacing.md,
+          paddingVertical: size === 'sm' ? spacing.xs : spacing.sm,
+          borderRadius: radii.md,
+          backgroundColor: pressed && !isDisabled ? palette.bgPressed : palette.bg,
+          borderWidth: palette.border === 'transparent' ? 0 : 1,
+          borderColor: palette.border,
+          opacity: isDisabled ? 0.52 : 1,
+          alignSelf: fullWidth ? 'stretch' : 'auto',
         },
         style,
       ]}
+      {...rest}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={textColor} />
+        <ActivityIndicator size="small" color={palette.text} />
       ) : (
-        <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+        <View style={[styles.row, { gap: spacing.xs }]}>
+          {icon ? <View style={styles.iconSlot}>{icon}</View> : null}
+          <Text
+            style={[
+              typography.label,
+              { color: palette.text, textAlign: 'center' },
+            ]}
+            numberOfLines={1}
+          >
+            {textLabel}
+          </Text>
+          {trailingIcon ? <View style={styles.iconSlot}>{trailingIcon}</View> : null}
+        </View>
       )}
     </Pressable>
   );
@@ -85,16 +123,16 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 46,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
   },
-  text: {
-    fontSize: 15,
-    fontWeight: '600',
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-

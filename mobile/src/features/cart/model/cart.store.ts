@@ -20,6 +20,7 @@ interface CartStoreState {
   orderType: OrderType;
   couponCode: string | null;
   deliveryCoords: { lat: number; lng: number } | null;
+  deliveryAddressText: string | null;
   favoriteIds: string[];
   addItem: (item: Omit<CartLineItem, 'lineKey'>) => void;
   updateQuantity: (lineKey: string, delta: number) => void;
@@ -29,6 +30,7 @@ interface CartStoreState {
   setOrderType: (type: OrderType) => void;
   setCouponCode: (code: string | null) => void;
   setDeliveryCoords: (coords: { lat: number; lng: number } | null) => void;
+  setDeliveryAddressText: (text: string | null) => void;
   toggleFavorite: (menuItemId: string) => void;
 }
 
@@ -45,6 +47,7 @@ export const useCartStore = create<CartStoreState>()(
       orderType: 'delivery',
       couponCode: null,
       deliveryCoords: null,
+      deliveryAddressText: null,
       favoriteIds: [],
 
       addItem: (item) =>
@@ -109,6 +112,8 @@ export const useCartStore = create<CartStoreState>()(
 
       setDeliveryCoords: (deliveryCoords) => set({ deliveryCoords }),
 
+      setDeliveryAddressText: (deliveryAddressText) => set({ deliveryAddressText }),
+
       toggleFavorite: (menuItemId) =>
         set((state) => {
           const exists = state.favoriteIds.includes(menuItemId);
@@ -127,6 +132,7 @@ export const useCartStore = create<CartStoreState>()(
         orderType: state.orderType,
         couponCode: state.couponCode,
         deliveryCoords: state.deliveryCoords,
+        deliveryAddressText: state.deliveryAddressText,
         favoriteIds: state.favoriteIds,
       }),
     },

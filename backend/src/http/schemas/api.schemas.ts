@@ -20,6 +20,20 @@ export const LogoutBodySchema = z.object({
   refreshToken: z.string().optional(),
 }).strict().optional();
 
+export const GoogleExchangeBodySchema = z.object({
+  code: z.string().min(4).max(2048),
+  codeVerifier: z.string().min(43).max(128),
+  redirectUri: z.string().url().max(512),
+  clientId: z.string().min(10).max(256),
+  nonce: z.string().min(16).max(256),
+}).strict();
+
+export const GoogleLinkBodySchema = GoogleExchangeBodySchema;
+
+export const UnlinkIdentityParamsSchema = z.object({
+  provider: z.enum(['google']),
+}).strict();
+
 export const StaffLoginBodySchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -47,6 +61,7 @@ export const PrintAgentTokenRevokeSchema = z.object({
 export const UpdateMeSchema = z.object({
   name: z.string().trim().min(1).max(150).optional(),
   email: z.string().email().nullable().optional(),
+  phone: z.string().trim().regex(PHONE_E164_REGEX, 'Geçerli bir E.164 telefon numarası giriniz').nullable().optional(),
   preferredLanguage: z.enum(SUPPORTED_LANGUAGES).optional(),
 }).strict();
 
@@ -249,5 +264,38 @@ export const AdminUpdateSettingsSchema = z.object({
   codMaxOpenOrders: z.number().int().nonnegative().optional(),
   paymentTimeoutMinutes: z.number().int().positive().optional(),
   heartbeatGraceSeconds: z.number().int().positive().optional(),
+}).strict();
+
+export const AdminCreateZoneSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  polygonWkt: z.string().trim().min(10),
+  minOrderKurus: z.number().int().nonnegative(),
+  deliveryFeeKurus: z.number().int().nonnegative(),
+  estimatedMinutes: z.number().int().positive().optional(),
+}).strict();
+
+export const AdminUpdateDriverSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  phone: z.string().trim().regex(PHONE_E164_REGEX).optional(),
+  isActive: z.boolean().optional(),
+}).strict();
+
+export const AdminCreateStaffSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.enum(['staff', 'owner']),
+  password: z.string().min(8),
+}).strict();
+
+export const AdminUpdateStaffSchema = z.object({
+  role: z.enum(['staff', 'owner']).optional(),
+  isActive: z.boolean().optional(),
+}).strict();
+
+export const StaffRefreshTokenBodySchema = z.object({
+  refreshToken: z.string().min(10),
+}).strict();
+
+export const OrderSearchQuerySchema = z.object({
+  query: z.string().trim().min(1).max(100),
 }).strict();
 

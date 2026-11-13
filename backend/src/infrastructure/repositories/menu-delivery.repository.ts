@@ -241,5 +241,35 @@ export class PostgresDeliveryRepository implements DeliveryRepository {
       return row ?? null;
     });
   }
+
+  async createZoneAdmin(
+    staffId: string,
+    input: { name: string; polygonWkt: string; minOrderKurus: number; deliveryFeeKurus: number; estimatedMinutes?: number },
+  ) {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const rows = await tx.execute(sql`
+        INSERT INTO public.delivery_zones (name, area, min_order_kurus, delivery_fee_kurus, estimated_minutes, is_active)
+        VALUES (
+          ${input.name},
+          ST_GeogFromText(${input.polygonWkt}),
+          ${input.minOrderKurus},
+          ${input.deliveryFeeKurus},
+          ${input.estimatedMinutes ?? 35},
+          true
+        )
+        RETURNING id, name, min_order_kurus::int AS "minOrderKurus", delivery_fee_kurus::int AS "deliveryFeeKurus", estimated_minutes AS "estimatedMinutes", is_active AS "isActive"
+      `);
+      return rows[0];
+    });
+  }
+
+  async deleteZoneAdmin(staffId: string, id: string): Promise<boolean> {
+    return withTx({ role: 'owner', staffId }, async (tx) => {
+      const rows = await tx.execute<{ id: string }>(sql`
+        DELETE FROM public.delivery_zones WHERE id = ${id}::uuid RETURNING id
+      `);
+      return rows.length > 0;
+    });
+  }
 }
 

@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { SupportedLanguage } from '@kardesler/shared';
 import { withTx, schema } from '../db/client.js';
+import { DomainError } from '../../domain/errors.js';
 import type {
   AddressRecord,
   AddressRepository,
@@ -17,30 +18,42 @@ export class PostgresUserRepository implements UserRepository {
 
   async updateCustomerProfile(
     userId: string,
-    input: { name?: string; email?: string | null; preferredLanguage?: SupportedLanguage },
+    input: { name?: string; email?: string | null; phone?: string | null; preferredLanguage?: SupportedLanguage },
   ): Promise<UserProfile> {
     return withTx({ role: 'customer', userId }, async (tx) => {
-      const [updated] = await tx
-        .update(schema.users)
-        .set({
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.email !== undefined ? { email: input.email } : {}),
-          ...(input.preferredLanguage !== undefined
-            ? { preferredLanguage: input.preferredLanguage }
-            : {}),
-        })
-        .where(and(eq(schema.users.id, userId), isNull(schema.users.deletedAt)))
-        .returning();
+      try {
+        const [updated] = await tx
+          .update(schema.users)
+          .set({
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.email !== undefined ? { email: input.email } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone } : {}),
+            ...(input.preferredLanguage !== undefined
+              ? { preferredLanguage: input.preferredLanguage }
+              : {}),
+          })
+          .where(and(eq(schema.users.id, userId), isNull(schema.users.deletedAt)))
+          .returning();
 
-      return {
-        id: updated.id,
-        phone: updated.phone,
-        name: updated.name,
-        email: updated.email,
-        preferredLanguage: updated.preferredLanguage,
-        referralCode: updated.referralCode,
-        isBlocked: updated.isBlocked,
-      };
+        return {
+          id: updated.id,
+          phone: updated.phone,
+          name: updated.name,
+          email: updated.email,
+          preferredLanguage: updated.preferredLanguage,
+          referralCode: updated.referralCode,
+          isBlocked: updated.isBlocked,
+        };
+      } catch (err) {
+        const code = err && typeof err === 'object'
+          ? ((err as { code?: unknown; cause?: { code?: unknown } }).code
+            ?? (err as { cause?: { code?: unknown } }).cause?.code)
+          : undefined;
+        if (code === '23505') {
+          throw new DomainError('CONFLICT', 409, 'Phone number is already associated with another account.');
+        }
+        throw err;
+      }
     });
   }
 

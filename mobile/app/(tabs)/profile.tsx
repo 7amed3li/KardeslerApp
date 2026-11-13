@@ -1,9 +1,24 @@
 import type { SupportedLanguage } from '@kardesler/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
 import {
-  Alert,
+  Award,
+  Bell,
+  ChevronLeft,
+  ChevronRight,
+  Globe,
+  LogOut,
+  MapPin,
+  Share2,
+  Shield,
+  Trash2,
+  User,
+} from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  I18nManager,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -17,10 +32,18 @@ import {
 import { queryKeys } from '../../src/api/query-keys';
 import {
   deleteMyAccount,
+  linkGoogleIdentity,
+  listCustomerIdentities,
   logoutCustomer,
+  unlinkCustomerIdentity,
   updateMyProfile,
 } from '../../src/features/auth/api/auth.api';
 import { useAuthStore } from '../../src/features/auth/model/auth.store';
+import {
+  isValidTurkishMobile,
+  normalizeTurkishPhone,
+} from '../../src/features/auth/model/auth.validation';
+import { runGooglePkceFlow } from '../../src/features/auth/model/google-auth';
 import { registerForPushNotificationsIfPermitted } from '../../src/features/notifications/notifications.service';
 import {
   fetchMyLoyalty,
@@ -28,8 +51,10 @@ import {
   recordConsent,
 } from '../../src/features/profile/api/profile.api';
 import { useTranslations } from '../../src/i18n';
-import { Button, Card, Screen, StateView } from '../../src/ui/components';
+import { Badge, BottomSheet, Button, Card, Screen, StateView } from '../../src/ui/components';
 import { useTheme } from '../../src/ui/themes/ThemeProvider';
+
+const LANGS: SupportedLanguage[] = ['tr', 'en', 'ar'];
 
 export default function ProfileTabScreen() {
   const theme = useTheme();
@@ -42,9 +67,26 @@ export default function ProfileTabScreen() {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
   const [saving, setSaving] = useState(false);
   const [marketingPush, setMarketingPush] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [osNotifGranted, setOsNotifGranted] = useState<boolean | null>(null);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [identityMsg, setIdentityMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setName(user?.name ?? '');
+    setEmail(user?.email ?? '');
+    setPhone(user?.phone ?? '');
+  }, [user]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void Notifications.getPermissionsAsync()
+      .then((res) => setOsNotifGranted(res.status === 'granted'))
+      .catch(() => setOsNotifGranted(false));
+  }, []);
 
   const loyaltyQuery = useQuery({
     queryKey: queryKeys.loyalty,
@@ -58,6 +100,57 @@ export default function ProfileTabScreen() {
     queryFn: fetchMyReferrals,
   });
 
+  const identitiesQuery = useQuery({
+    queryKey: ['customer-identities'],
+    enabled: isAuthenticated,
+    queryFn: listCustomerIdentities,
+  });
+
+  const googleIdentity = identitiesQuery.data?.identities.find((i) => i.provider === 'google');
+
+  const handleLinkGoogle = async () => {
+    setIdentityMsg(null);
+    setIdentityLoading(true);
+    try {
+      const flow = await runGooglePkceFlow(Platform.OS);
+      if (flow.status === 'not_configured') {
+        setIdentityMsg(t.auth.googleNotConfigured);
+        return;
+      }
+      if (flow.status === 'cancelled') {
+        setIdentityMsg(t.auth.googleCancelled);
+        return;
+      }
+      if (flow.status === 'error') {
+        setIdentityMsg(t.auth.googleError);
+        return;
+      }
+      await linkGoogleIdentity(flow.payload);
+      await identitiesQuery.refetch();
+    } catch (err) {
+      setIdentityMsg(err instanceof Error ? err.message : t.auth.googleError);
+    } finally {
+      setIdentityLoading(false);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    setIdentityMsg(null);
+    if (!user?.phone) {
+      setIdentityMsg(t.auth.unlinkBlockedNoPhone);
+      return;
+    }
+    setIdentityLoading(true);
+    try {
+      await unlinkCustomerIdentity('google');
+      await identitiesQuery.refetch();
+    } catch (err) {
+      setIdentityMsg(err instanceof Error ? err.message : t.common.errorTitle);
+    } finally {
+      setIdentityLoading(false);
+    }
+  };
+
   const handleLanguageChange = (lang: SupportedLanguage) => {
     setLanguage(lang);
     if (isAuthenticated) {
@@ -65,10 +158,44 @@ export default function ProfileTabScreen() {
     }
   };
 
+  const ChevronIcon = I18nManager.isRTL ? ChevronLeft : ChevronRight;
+
+  const renderLanguageSelector = () => (
+    <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+      <View style={styles.inlineRow}>
+        <Globe size={18} color={theme.colors.primary} />
+        <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+          {t.profile.language}
+        </Text>
+      </View>
+      <View style={[styles.inlineRow, { gap: theme.spacing.xs }]}>
+        {LANGS.map((l) => (
+          <Button
+            key={l}
+            label={l.toUpperCase()}
+            size="sm"
+            variant={language === l ? 'primary' : 'outline'}
+            style={{ flex: 1 }}
+            onPress={() => handleLanguageChange(l)}
+          />
+        ))}
+      </View>
+    </Card>
+  );
+
   if (!isAuthenticated) {
     return (
-      <Screen>
-        <View style={styles.guestWrap}>
+      <Screen edges={['top']}>
+        <ScrollView
+          contentContainerStyle={{
+            padding: theme.spacing.md,
+            gap: theme.spacing.md,
+            flexGrow: 1,
+          }}
+        >
+          <Text style={[theme.typography.titleLg, { color: theme.colors.text }]}>
+            {t.profile.title}
+          </Text>
           <StateView
             kind="empty"
             title={t.profile.guestTitle}
@@ -76,186 +203,365 @@ export default function ProfileTabScreen() {
             actionLabel={t.common.loginRequired}
             onAction={() => router.push('/auth')}
           />
-          <Card style={styles.langCard}>
-            <Text style={{ color: theme.colors.text, fontWeight: '700' }}>
-              {t.profile.language}
-            </Text>
-            <View style={styles.langRow}>
-              {(['tr', 'en', 'ar'] as SupportedLanguage[]).map((lang) => (
-                <Button
-                  key={lang}
-                  title={lang.toUpperCase()}
-                  variant={language === lang ? 'primary' : 'outline'}
-                  style={styles.langBtn}
-                  onPress={() => handleLanguageChange(lang)}
-                />
-              ))}
-            </View>
-          </Card>
-        </View>
+          {renderLanguageSelector()}
+        </ScrollView>
       </Screen>
     );
   }
 
-  const referralCode = referralQuery.data?.referralCode ?? user?.referralCode ?? '';
-
-  const handleSaveProfile = async () => {
-    setSaving(true);
-    try {
-      await updateMyProfile({
-        ...(name.trim() ? { name: name.trim() } : {}),
-        ...(email.trim() ? { email: email.trim() } : {}),
-        preferredLanguage: language,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleToggleMarketing = async (val: boolean) => {
-    setMarketingPush(val);
-    if (val) {
-      await registerForPushNotificationsIfPermitted();
-    }
-    await recordConsent({
-      type: 'marketing_push',
-      granted: val,
-      source: 'mobile_profile',
-      version: '1.0',
-    });
-  };
-
-  const handleDelete = () => {
-    if (Platform.OS === 'web') {
-      if (!confirmDelete) {
-        setConfirmDelete(true);
-        return;
-      }
-      void deleteMyAccount(queryClient);
-      return;
-    }
-    Alert.alert(t.auth.deleteAccount, t.auth.deleteAccountConfirm, [
-      { text: t.common.cancel, style: 'cancel' },
-      {
-        text: t.common.delete,
-        style: 'destructive',
-        onPress: () => void deleteMyAccount(queryClient),
-      },
-    ]);
-  };
-
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {t.profile.loyaltyPoints}: {loyaltyQuery.data?.pointsBalance ?? 0}
+    <Screen edges={['top']}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: theme.spacing.md,
+          gap: theme.spacing.md,
+          paddingBottom: theme.spacing.xxl,
+        }}
+      >
+        <Text style={[theme.typography.titleLg, { color: theme.colors.text }]}>
+          {t.profile.title}
+        </Text>
+
+        {/* Section 1: Account */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.profile.sectionAccount}
           </Text>
-          {referralCode ? (
-            <View style={styles.refRow}>
-              <Text style={{ color: theme.colors.textSecondary }}>
-                {t.profile.referralCode}: <Text style={{ fontWeight: '700' }}>{referralCode}</Text>
+          <Card variant="elevated" style={{ gap: theme.spacing.sm }}>
+            <View style={styles.inlineRow}>
+              <User size={18} color={theme.colors.primary} />
+              <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                {user?.phone ?? user?.email ?? user?.name ?? ''}
+              </Text>
+            </View>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder={t.profile.editName}
+              placeholderTextColor={theme.colors.textMuted}
+              style={[
+                theme.typography.body,
+                styles.input,
+                {
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                  minHeight: theme.hitTarget.min,
+                  paddingHorizontal: theme.spacing.sm,
+                },
+              ]}
+            />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder={t.profile.editEmail}
+              placeholderTextColor={theme.colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={[
+                theme.typography.body,
+                styles.input,
+                {
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                  minHeight: theme.hitTarget.min,
+                  paddingHorizontal: theme.spacing.sm,
+                },
+              ]}
+            />
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder={t.auth.phonePlaceholder}
+              placeholderTextColor={theme.colors.textMuted}
+              keyboardType="phone-pad"
+              style={[
+                theme.typography.body,
+                styles.input,
+                {
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radii.sm,
+                  minHeight: theme.hitTarget.min,
+                  paddingHorizontal: theme.spacing.sm,
+                },
+              ]}
+            />
+            <Button
+              label={t.common.save}
+              loading={saving}
+              onPress={() => {
+                setSaving(true);
+                const normalized = phone.trim() && isValidTurkishMobile(phone)
+                  ? normalizeTurkishPhone(phone)
+                  : undefined;
+                void updateMyProfile({
+                  name: name.trim() || undefined,
+                  email: email.trim() || undefined,
+                  phone: normalized,
+                }).finally(() => setSaving(false));
+              }}
+            />
+          </Card>
+
+          <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+            <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+              {t.auth.linkedAccountsTitle}
+            </Text>
+            <View style={styles.rowBetween}>
+              <Text style={[theme.typography.bodySm, { color: theme.colors.textSecondary, flex: 1 }]}>
+                {googleIdentity
+                  ? `${t.auth.googleLinked}${googleIdentity.emailAtLink ? ` (${googleIdentity.emailAtLink})` : ''}`
+                  : t.auth.googleNotLinked}
+              </Text>
+              {googleIdentity ? (
+                <Button
+                  label={t.auth.unlinkGoogle}
+                  variant="outline"
+                  size="sm"
+                  loading={identityLoading}
+                  onPress={() => void handleUnlinkGoogle()}
+                />
+              ) : (
+                <Button
+                  label={t.auth.linkGoogle}
+                  variant="outline"
+                  size="sm"
+                  loading={identityLoading}
+                  onPress={() => void handleLinkGoogle()}
+                />
+              )}
+            </View>
+            {identityMsg ? (
+              <Text style={[theme.typography.caption, { color: theme.colors.error }]}>
+                {identityMsg}
+              </Text>
+            ) : null}
+          </Card>
+        </View>
+
+        {/* Section 2: Addresses */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.profile.sectionAddresses}
+          </Text>
+          <Pressable onPress={() => router.push('/addresses')} accessibilityRole="button">
+            <Card variant="elevated" style={styles.rowBetween}>
+              <View style={styles.inlineRow}>
+                <MapPin size={18} color={theme.colors.primary} />
+                <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                  {t.profile.addresses}
+                </Text>
+              </View>
+              <ChevronIcon size={18} color={theme.colors.textMuted} />
+            </Card>
+          </Pressable>
+        </View>
+
+        {/* Section 3: Loyalty & Referrals */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.profile.sectionLoyalty}
+          </Text>
+          <Card variant="elevated" style={{ gap: theme.spacing.sm }}>
+            <View style={styles.rowBetween}>
+              <View style={styles.inlineRow}>
+                <Award size={18} color={theme.colors.accent} />
+                <Text style={[theme.typography.body, { color: theme.colors.text }]}>
+                  {t.profile.loyaltyPoints}
+                </Text>
+              </View>
+              <Text style={[theme.typography.titleMd, { color: theme.colors.accent }]}>
+                {loyaltyQuery.data?.pointsBalance ?? 0}
+              </Text>
+            </View>
+            {referralQuery.data?.referralCode ? (
+              <View style={styles.rowBetween}>
+                <View>
+                  <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+                    {t.profile.referralCode}
+                  </Text>
+                  <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                    {referralQuery.data.referralCode}
+                  </Text>
+                </View>
+                <Button
+                  label={t.profile.shareReferral}
+                  size="sm"
+                  variant="outline"
+                  icon={<Share2 size={14} color={theme.colors.primary} />}
+                  onPress={() => void Share.share({ message: referralQuery.data?.referralCode ?? '' })}
+                />
+              </View>
+            ) : null}
+          </Card>
+        </View>
+
+        {/* Section 4: Preferences (Language + Notifications) */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.profile.sectionPreferences}
+          </Text>
+          {renderLanguageSelector()}
+
+          <Card variant="elevated" style={{ gap: theme.spacing.sm }}>
+            <View style={styles.rowBetween}>
+              <View style={styles.inlineRow}>
+                <Bell size={18} color={theme.colors.primary} />
+                <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                  {t.profile.notifications}
+                </Text>
+              </View>
+              {osNotifGranted !== null ? (
+                <Badge
+                  label={`${t.profile.osPermissionStatus}: ${
+                    osNotifGranted
+                      ? t.profile.osPermissionGranted
+                      : t.profile.osPermissionDenied
+                  }`}
+                  tone={osNotifGranted ? 'success' : 'neutral'}
+                />
+              ) : null}
+            </View>
+
+            <View style={styles.rowBetween}>
+              <Text style={[theme.typography.body, { color: theme.colors.text, flex: 1 }]}>
+                {t.profile.pushOrderUpdates}
               </Text>
               <Button
-                title={t.profile.shareReferral}
-                variant="secondary"
-                onPress={() =>
-                  void Share.share({
-                    message: `Kardeşler Cihangir davet kodum: ${referralCode}`,
-                  })
+                label={
+                  osNotifGranted
+                    ? t.profile.openSystemSettings
+                    : t.orders.enableNotifications
                 }
+                size="sm"
+                variant="outline"
+                onPress={() => {
+                  if (osNotifGranted === false && Platform.OS !== 'web') {
+                    void registerForPushNotificationsIfPermitted().then((token) =>
+                      setOsNotifGranted(Boolean(token)),
+                    );
+                  } else if (Platform.OS !== 'web') {
+                    void Linking.openSettings();
+                  }
+                }}
               />
             </View>
-          ) : null}
-        </Card>
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {t.profile.editName}
+            <View style={styles.rowBetween}>
+              <Text style={[theme.typography.body, { color: theme.colors.text, flex: 1 }]}>
+                {t.profile.pushMarketing}
+              </Text>
+              <Switch
+                value={marketingPush}
+                onValueChange={(next) => {
+                  setMarketingPush(next);
+                  void recordConsent({
+                    type: 'marketing_push',
+                    granted: next,
+                    source: 'mobile_profile',
+                    version: '1.0',
+                  });
+                }}
+                trackColor={{ true: theme.colors.primary, false: theme.colors.border }}
+              />
+            </View>
+          </Card>
+        </View>
+
+        {/* Section 5: Support & Legal + KVKK Delete */}
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
+            {t.profile.sectionSupport}
           </Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder={t.profile.editName}
-            placeholderTextColor={theme.colors.textMuted}
-            style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.text }]}
-          />
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder={t.profile.editEmail}
-            placeholderTextColor={theme.colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.text }]}
-          />
-          <Button
-            title={t.common.save}
-            loading={saving}
-            onPress={() => void handleSaveProfile()}
-          />
-        </Card>
-
-        <Pressable onPress={() => router.push('/addresses')}>
-          <Card style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>
-              {t.profile.addresses} →
+          <Card variant="elevated" style={{ gap: theme.spacing.xs }}>
+            <View style={styles.inlineRow}>
+              <Shield size={16} color={theme.colors.textSecondary} />
+              <Text style={[theme.typography.titleSm, { color: theme.colors.text }]}>
+                {t.profile.privacyNotice}
+              </Text>
+            </View>
+            <Text style={[theme.typography.bodySm, { color: theme.colors.textSecondary }]}>
+              {t.profile.privacySummary}
             </Text>
           </Card>
-        </Pressable>
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {t.profile.language}
-          </Text>
-          <View style={styles.langRow}>
-            {(['tr', 'en', 'ar'] as SupportedLanguage[]).map((lang) => (
-              <Button
-                key={lang}
-                title={lang.toUpperCase()}
-                variant={language === lang ? 'primary' : 'outline'}
-                style={styles.langBtn}
-                onPress={() => handleLanguageChange(lang)}
-              />
-            ))}
-          </View>
-        </Card>
+          <Button
+            label={t.auth.logout}
+            variant="outline"
+            icon={<LogOut size={16} color={theme.colors.primary} />}
+            onPress={() => {
+              void logoutCustomer(queryClient);
+            }}
+          />
 
-        <Card style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {t.profile.notifications}
-          </Text>
-          <View style={styles.switchRow}>
-            <Text style={{ color: theme.colors.text, flex: 1 }}>{t.profile.pushMarketing}</Text>
-            <Switch value={marketingPush} onValueChange={(v) => void handleToggleMarketing(v)} />
-          </View>
-        </Card>
-
-        <Button
-          title={t.auth.logout}
-          variant="outline"
-          onPress={() => void logoutCustomer(queryClient)}
-        />
-
-        <Button
-          title={confirmDelete ? `${t.common.confirm}: ${t.auth.deleteAccount}` : t.auth.deleteAccount}
-          variant="danger"
-          onPress={handleDelete}
-        />
+          <Button
+            label={t.auth.deleteAccount}
+            variant="danger"
+            icon={<Trash2 size={16} color="#FFFFFF" />}
+            onPress={() => setDeleteStep(1)}
+          />
+        </View>
       </ScrollView>
+
+      {/* 2-Step KVKK Account Deletion Confirmation Sheet */}
+      <BottomSheet
+        visible={deleteStep > 0}
+        onClose={() => setDeleteStep(0)}
+        title={t.auth.deleteAccount}
+        subtitle={
+          deleteStep === 1 ? t.auth.deleteAccountConfirm : t.auth.deleteAccountStep2
+        }
+        closeLabel={t.common.close}
+      >
+        <View style={{ gap: theme.spacing.sm }}>
+          {deleteStep === 1 ? (
+            <Button
+              label={t.common.confirm}
+              variant="danger"
+              fullWidth
+              onPress={() => setDeleteStep(2)}
+            />
+          ) : (
+            <Button
+              label={t.auth.deleteAccount}
+              variant="danger"
+              fullWidth
+              onPress={() => {
+                setDeleteStep(0);
+                void deleteMyAccount(queryClient);
+              }}
+            />
+          )}
+          <Button
+            label={t.common.cancel}
+            variant="secondary"
+            fullWidth
+            onPress={() => setDeleteStep(0)}
+          />
+        </View>
+      </BottomSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  guestWrap: { flex: 1, paddingBottom: 16 },
-  langCard: { marginHorizontal: 16, gap: 10 },
-  scroll: { padding: 16, gap: 12 },
-  card: { gap: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: '700' },
-  refRow: { gap: 8 },
-  input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, height: 42, fontSize: 14 },
-  langRow: { flexDirection: 'row', gap: 8 },
-  langBtn: { flex: 1 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  inlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  input: {
+    borderWidth: 1,
+  },
 });
