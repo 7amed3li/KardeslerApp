@@ -149,7 +149,8 @@ function buildUseCases(
 }
 
 export function createAppContainer(overrides: CompositionOverrides = {}): AppContainer {
-  const state = buildStateAdapters(overrides.useInMemoryState ?? false);
+  const useInMemory = overrides.useInMemoryState ?? (env.REDIS_URL === 'memory');
+  const state = buildStateAdapters(useInMemory);
   const p = buildCoreProviders(overrides);
   const uc = buildUseCases(state, p);
   const jobQueue = state.bullRedis ? new BullMqJobAdapter(state.bullRedis, uc.jobsUseCases) : null;
