@@ -46,3 +46,6 @@ dump.rdb
 ~$*
 .stryker-tmp/
 reports/
+
+mobile/google-services.json
+
