@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import type { GoogleExchangePayload } from '../api/auth.api';
@@ -16,6 +17,10 @@ export type GoogleFlowResult =
 
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 
+const DEFAULT_IOS_CLIENT_ID = '717773080616-cukeglj0gd30f412qtefglr225rhgibi.apps.googleusercontent.com';
+const DEFAULT_ANDROID_CLIENT_ID = '717773080616-v8cu51sbfc5e1qdsh6ooe8nfnj9s0arg.apps.googleusercontent.com';
+const DEFAULT_WEB_CLIENT_ID = '717773080616-8n5u4e1at0aecotdvkknfiree5lcm5ct.apps.googleusercontent.com';
+
 function toBase64UrlFromBytes(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 1) {
@@ -32,15 +37,19 @@ function toBase64UrlFromBase64(base64: string): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function readEnv(inlined: string | undefined, key: string): string {
-  return (inlined ?? process.env[key] ?? '').trim();
+function readEnv(inlined: string | undefined, key: string, fallback: string = ''): string {
+  if (inlined !== undefined) return inlined.trim();
+  if (process.env[key] !== undefined) return process.env[key]!.trim();
+  const extra = Constants.expoConfig?.extra as Record<string, string> | undefined;
+  if (extra && extra[key] !== undefined) return extra[key].trim();
+  return fallback;
 }
 
 export function getGoogleOAuthConfig(platformOs: string = 'web'): GoogleOAuthConfig | null {
-  const iosId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID');
-  const androidId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID');
-  const webId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID');
-  const configuredRedirect = readEnv(process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI, 'EXPO_PUBLIC_GOOGLE_REDIRECT_URI');
+  const iosId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', DEFAULT_IOS_CLIENT_ID);
+  const androidId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID', DEFAULT_ANDROID_CLIENT_ID);
+  const webId = readEnv(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', DEFAULT_WEB_CLIENT_ID);
+  const configuredRedirect = readEnv(process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI, 'EXPO_PUBLIC_GOOGLE_REDIRECT_URI', 'kardesler://auth/google');
 
   let clientId = '';
   if (platformOs === 'ios') clientId = iosId;
@@ -49,7 +58,7 @@ export function getGoogleOAuthConfig(platformOs: string = 'web'): GoogleOAuthCon
 
   if (!clientId) return null;
 
-  const redirectUri = configuredRedirect || Linking.createURL('auth/callback');
+  const redirectUri = configuredRedirect || (platformOs === 'web' ? Linking.createURL('auth/callback') : 'kardesler://auth/google');
   return { clientId, redirectUri };
 }
 
