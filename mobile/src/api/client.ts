@@ -7,19 +7,12 @@ import { ApiClientError, normalizeApiError } from './errors';
 import type { paths } from './generated/schema';
 
 export function resolveApiBaseUrl(): string {
-  if (process.env.EXPO_PUBLIC_API_URL) {
+  if (process.env.EXPO_PUBLIC_API_URL && !process.env.EXPO_PUBLIC_API_URL.includes('127.0.0.1')) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
   const extraUrl = (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl;
-  if (extraUrl && extraUrl !== 'http://127.0.0.1:4000') {
+  if (extraUrl && !extraUrl.includes('127.0.0.1') && !extraUrl.includes('localhost')) {
     return extraUrl;
-  }
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    if (host) {
-      return `http://${host}:4000`;
-    }
   }
   return 'https://kardeslerapp.onrender.com';
 }
@@ -107,7 +100,7 @@ export function createApiClient(baseUrlOverride?: string) {
       }
 
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15_000);
+      const timer = setTimeout(() => controller.abort(), 60_000);
 
       try {
         const res = await fetch(new Request(req, { headers }), {

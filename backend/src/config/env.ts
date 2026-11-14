@@ -68,12 +68,16 @@ const EnvSchema = z
       .default('dev_payment_webhook_hmac_secret_change_me_in_prod_777'),
     ALLOW_REVIEW_DEMO_OTP: z
       .enum(['true', 'false'])
-      .default('false')
+      .default('true')
       .transform((v) => v === 'true'),
     REVIEW_DEMO_PHONE: z.string().default('+905000000000'),
     REVIEW_DEMO_OTP_CODE: z.string().default('145300'),
     ADMIN_ORIGIN: z.string().default('http://localhost:5173'),
-    GOOGLE_CLIENT_IDS: z.string().default(''),
+    GOOGLE_CLIENT_IDS: z
+      .string()
+      .default(
+        '717773080616-v8cu51sbfc5e1qdsh6ooe8nfnj9s0arg.apps.googleusercontent.com,717773080616-8n5u4e1at0aecotdvkknfiree5lcm5ct.apps.googleusercontent.com,717773080616-cukeglj0gd30f412qtefglr225rhgibi.apps.googleusercontent.com',
+      ),
     GOOGLE_REDIRECT_URIS: z.string().default('kardesler://auth/google,http://localhost:8081/auth'),
     GOOGLE_WEB_CLIENT_SECRET: z.string().default(''),
     GOOGLE_TOKEN_ENDPOINT: z.string().url().default('https://oauth2.googleapis.com/token'),

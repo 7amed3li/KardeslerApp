@@ -5,11 +5,11 @@ import type { UserProfileDto } from '../../../api/types';
 import { secureStorage } from '../../../lib/secure-storage';
 import { useAuthStore } from '../model/auth.store';
 
-export async function requestCustomerOtp(phone: string): Promise<{ expiresInSeconds: number }> {
-  return unwrapApiResponse<{ expiresInSeconds: number }>(
+export async function requestCustomerOtp(phone: string): Promise<{ expiresInSeconds: number; demoCode?: string }> {
+  return unwrapApiResponse<{ expiresInSeconds: number; demoCode?: string }>(
     apiClient.POST('/api/v1/auth/customer/otp/request', {
       body: { phone },
-    }) as Promise<{ data?: { expiresInSeconds: number }; error?: unknown; response: Response }>,
+    }) as Promise<{ data?: { expiresInSeconds: number; demoCode?: string }; error?: unknown; response: Response }>,
   );
 }
 

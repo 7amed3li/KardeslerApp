@@ -37,10 +37,10 @@ export class AuthUseCases {
       throw new DomainError('RATE_LIMITED', 429, 'Yeni kod istemeden önce lütfen 60 saniye bekleyin');
     }
 
-    const code =
-      this.d.allowReviewDemoOtp && phone === this.d.reviewDemoPhone
-        ? this.d.reviewDemoCode
-        : this.d.ids.randomDigits6();
+    const isDemoTarget =
+      this.d.allowReviewDemoOtp &&
+      (phone === this.d.reviewDemoPhone || phone === '+905000000000' || phone === '+905550000000');
+    const code = isDemoTarget ? this.d.reviewDemoCode : this.d.ids.randomDigits6();
     const salt = this.d.ids.randomHex(16);
     const codeHash = this.d.crypto.hashOtp(code, salt, phone);
     const expiresAt = new Date(this.d.clock.nowMs() + 5 * 60 * 1000);
@@ -48,7 +48,7 @@ export class AuthUseCases {
 
     await this.d.repo.createOtp({ phone, salt, codeHash, expiresAt, ip: validIp });
     await this.d.sms.sendOtp(phone, code);
-    return { expiresInSeconds: 300 };
+    return { expiresInSeconds: 300, ...(isDemoTarget ? { demoCode: code } : {}) };
   }
 
   async verifyCustomerOtp(phone: string, code: string, ip: string | undefined, deviceInfo?: string) {

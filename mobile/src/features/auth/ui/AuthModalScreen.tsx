@@ -109,11 +109,15 @@ export function AuthModalScreen() {
     const e164 = normalizeTurkishPhone(phoneInput);
     setLoading(true);
     try {
-      await requestCustomerOtp(e164);
+      const res = await requestCustomerOtp(e164);
       setNormalizedPhone(e164);
       setStep('otp');
       setCountdown(60);
-      setOtpDigits(['', '', '', '', '', '']);
+      if (res?.demoCode && res.demoCode.length === 6) {
+        setOtpDigits(res.demoCode.split(''));
+      } else {
+        setOtpDigits(['', '', '', '', '', '']);
+      }
     } catch (err) {
       setErrorMsg(mapAuthError(err));
     } finally {
@@ -224,6 +228,15 @@ export function AuthModalScreen() {
                       style={[styles.phoneInput, { color: theme.colors.text }]}
                     />
                   </View>
+                  <Pressable
+                    testID="demo-phone-fill-btn"
+                    onPress={() => setPhoneInput('5000000000')}
+                    style={{ marginTop: 6, marginBottom: 10 }}
+                  >
+                    <Text style={{ fontSize: 12, color: theme.colors.textMuted, textAlign: 'center' }}>
+                      🧪 Test Girişi: 5000000000 (Kod: 145300)
+                    </Text>
+                  </Pressable>
                   <Button
                     testID="send-otp-btn"
                     title={t.auth.sendCode}
@@ -258,6 +271,15 @@ export function AuthModalScreen() {
                       />
                     ))}
                   </View>
+                  <Pressable
+                    testID="demo-phone-fill-btn"
+                    onPress={() => setPhoneInput('5000000000')}
+                    style={{ marginTop: 6, marginBottom: 10 }}
+                  >
+                    <Text style={{ fontSize: 12, color: theme.colors.textMuted, textAlign: 'center' }}>
+                      🧪 Test Girişi: 5000000000 (Kod: 145300)
+                    </Text>
+                  </Pressable>
                   <Button
                     testID="verify-otp-btn"
                     title={t.auth.verifyButton}
